@@ -8,7 +8,10 @@ function Navbar() {
   return (
     <nav className="navbar navbar-expand-lg site-nav sticky-top">
       <div className="container">
-        <a className="navbar-brand" href="#">Hackathon</a>
+        <a className="navbar-brand" href="#">
+          <span className="brand-mark" aria-hidden="true"></span>
+          Hackathon
+        </a>
         <button
           className="navbar-toggler"
           type="button"
@@ -21,11 +24,11 @@ function Navbar() {
           <span className="navbar-toggler-icon"></span>
         </button>
         <div className="collapse navbar-collapse" id="navbarNav">
-          <ul className="navbar-nav ms-auto">
+          <ul className="navbar-nav ms-auto align-items-lg-center">
             <li className="nav-item"><a className="nav-link active" href="#">Home</a></li>
             <li className="nav-item"><a className="nav-link" href="#demo">Demo</a></li>
-            <li className="nav-item">
-              <a className="nav-link" href={`${API_BASE}/docs`}>API Docs</a>
+            <li className="nav-item ms-lg-2">
+              <a className="nav-cta" href={`${API_BASE}/docs`}>API Docs</a>
             </li>
           </ul>
         </div>

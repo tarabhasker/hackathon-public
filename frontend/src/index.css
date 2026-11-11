@@ -65,30 +65,123 @@ body {
    Navbar
 --------------------------------------------------------------------------- */
 .site-nav {
-  background: rgba(11, 16, 32, 0.65) !important;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: rgba(11, 16, 32, 0.72);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
   border-bottom: 1px solid var(--border);
+  padding: 0.85rem 0;
 }
 
 .site-nav .navbar-brand {
-  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 700;
+  font-size: 1.05rem;
   letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.brand-mark {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
   background: var(--gradient);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent !important;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.5);
+  position: relative;
+}
+
+.brand-mark::after {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.85);
+  clip-path: polygon(55% 0, 20% 58%, 45% 58%, 40% 100%, 80% 40%, 52% 40%);
 }
 
 .site-nav .nav-link {
+  position: relative;
   color: var(--text-dim);
   font-weight: 500;
+  font-size: 0.95rem;
+  padding: 0.45rem 0.9rem;
   transition: color 0.2s ease;
+}
+
+.site-nav .nav-link::after {
+  content: '';
+  position: absolute;
+  left: 0.9rem;
+  right: 0.9rem;
+  bottom: 0.15rem;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--gradient);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s ease;
 }
 
 .site-nav .nav-link:hover,
 .site-nav .nav-link.active {
   color: var(--text);
+}
+
+.site-nav .nav-link:hover::after,
+.site-nav .nav-link.active::after {
+  transform: scaleX(1);
+}
+
+.nav-cta {
+  display: inline-block;
+  padding: 0.45rem 1.1rem;
+  border: 1px solid rgba(99, 102, 241, 0.5);
+  border-radius: 999px;
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.88rem;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.nav-cta:hover {
+  color: #fff;
+  background: var(--gradient);
+  border-color: transparent;
+  box-shadow: 0 6px 18px rgba(99, 102, 241, 0.4);
+}
+
+.site-nav .navbar-toggler {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.35rem 0.6rem;
+}
+
+.site-nav .navbar-toggler:focus {
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3);
+}
+
+/* Mobile: give the dropdown menu a card look instead of bare links */
+@media (max-width: 991.98px) {
+  .site-nav .navbar-collapse {
+    margin-top: 0.9rem;
+    padding: 0.75rem;
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+  }
+
+  .site-nav .nav-link { padding: 0.6rem 0.9rem; }
+  .site-nav .nav-link::after { display: none; }
+
+  .site-nav .nav-item + .nav-item { margin-top: 0.15rem; }
+
+  .nav-cta {
+    display: block;
+    text-align: center;
+    margin: 0.5rem 0.9rem 0.25rem;
+  }
 }
 
 /* ---------------------------------------------------------------------------

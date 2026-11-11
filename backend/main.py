@@ -50,8 +50,10 @@ app.add_middleware(
 
 # --- Request/response models --------------------------------------------------
 
-class ItemCreate(BaseModel):
+class QuizEntry(BaseModel):
     name: str
+    age: int
+    favourite_food: str
 
 
 # --- API ------------------------------------------------------------------------
@@ -63,36 +65,29 @@ def health():
     return {"status": "ok"}
 
 
-@app.get("/api/items")
-def list_items():
-    with engine.connect() as conn:
-        rows = conn.execute(
-            text("SELECT id, name, created_at FROM items ORDER BY id DESC")
-        ).mappings().all()
-    return [dict(row) for row in rows]
+@app.post("/api/quiz", status_code=201)
+def submit_quiz(entry: QuizEntry):
+    name = entry.name.strip()
+    food = entry.favourite_food.strip()
+    if not name or not food:
+        raise HTTPException(status_code=400, detail="All fields are required")
+    if not 1 <= entry.age <= 150:
+        raise HTTPException(status_code=400, detail="Age must be between 1 and 150")
 
+    # Rigorous, highly scientific sorting algorithm
+    house = "Gryffindor"
 
-@app.post("/api/items", status_code=201)
-def create_item(item: ItemCreate):
-    name = item.name.strip()
-    if not name:
-        raise HTTPException(status_code=400, detail="'name' must not be empty")
     with engine.begin() as conn:
-        new_id = conn.execute(
-            text("INSERT INTO items (name) VALUES (:name) RETURNING id"),
-            {"name": name},
-        ).scalar_one()
-    return {"id": new_id, "name": name}
-
-
-@app.delete("/api/items/{item_id}", status_code=204)
-def delete_item(item_id: int):
-    with engine.begin() as conn:
-        result = conn.execute(
-            text("DELETE FROM items WHERE id = :id"), {"id": item_id}
+        conn.execute(
+            text(
+                "INSERT INTO quiz_entries (name, age, favourite_food, house) "
+                "VALUES (:name, :age, :food, :house)"
+            ),
+            {"name": name, "age": entry.age, "food": food, "house": house},
         )
-    if result.rowcount == 0:
-        raise HTTPException(status_code=404, detail="Item not found")
+        total = conn.execute(text("SELECT COUNT(*) FROM quiz_entries")).scalar_one()
+
+    return {"house": house, "entry_number": total}
 
 
 # --- Frontend (production only) -------------------------------------------------

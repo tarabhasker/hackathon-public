@@ -325,95 +325,181 @@ body {
   margin-bottom: 1.5rem;
 }
 
-.item-form {
-  display: flex;
-  gap: 0.6rem;
-  margin-bottom: 1.25rem;
+/* ---------------------------------------------------------------------------
+   Quiz form
+--------------------------------------------------------------------------- */
+.quiz-form { display: grid; gap: 1rem; }
+
+.quiz-form label { display: grid; gap: 0.4rem; }
+
+.quiz-form label span {
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-dim);
 }
 
-.item-form input {
-  flex: 1;
+.quiz-form input {
   background: rgba(0, 0, 0, 0.25);
   border: 1px solid var(--border);
   border-radius: 12px;
   color: var(--text);
-  padding: 0.65rem 1rem;
+  padding: 0.7rem 1rem;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.item-form input::placeholder { color: #5b6378; }
+.quiz-form input::placeholder { color: #5b6378; }
 
-.item-form input:focus {
+.quiz-form input:focus {
   outline: none;
-  background: rgba(0, 0, 0, 0.25);
-  color: var(--text);
   border-color: var(--accent-1);
   box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.18);
 }
 
+.quiz-form input:disabled { opacity: 0.6; }
+
+.quiz-error {
+  margin: 0;
+  color: #f87171;
+  font-size: 0.9rem;
+}
+
+.btn-submit { margin-top: 0.4rem; }
+
+.btn-submit.sorting { opacity: 0.85; }
+
+.hat-spin {
+  display: inline-block;
+  animation: hatWobble 0.9s ease-in-out infinite;
+}
+
+@keyframes hatWobble {
+  0%, 100% { transform: rotate(-12deg); }
+  50%      { transform: rotate(12deg) translateY(-2px); }
+}
+
 /* ---------------------------------------------------------------------------
-   Items list
+   Reveal overlay
 --------------------------------------------------------------------------- */
-.items { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; }
-
-.item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.8rem 1.1rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  animation: itemIn 0.3s ease both;
-  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1050;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: rgba(5, 8, 18, 0.78);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: overlayIn 0.3s ease both;
 }
 
-.item:hover {
-  background: var(--surface-hover);
-  border-color: rgba(255, 255, 255, 0.16);
-  transform: translateX(3px);
+@keyframes overlayIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
-.item.removing {
-  animation: itemOut 0.25s ease forwards;
+.reveal-card {
+  position: relative;
+  max-width: 420px;
+  width: 100%;
+  text-align: center;
+  background: linear-gradient(180deg, #1a1030, #140b24);
+  border: 1px solid rgba(211, 166, 37, 0.45);
+  border-radius: 22px;
+  padding: 2.4rem 2rem 2.2rem;
+  box-shadow:
+    0 0 0 1px rgba(174, 0, 1, 0.25),
+    0 30px 80px rgba(0, 0, 0, 0.6),
+    0 0 60px rgba(211, 166, 37, 0.12);
+  animation: revealPop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s both;
+}
+
+@keyframes revealPop {
+  from { opacity: 0; transform: scale(0.6) translateY(30px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.crest {
+  position: relative;
+  width: 110px;
+  margin: 0 auto 1.2rem;
+  animation: crestIn 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) 0.35s both;
+}
+
+@keyframes crestIn {
+  from { opacity: 0; transform: scale(0.3) rotate(-14deg); }
+  to   { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+
+.crest-shield { width: 100%; height: auto; filter: drop-shadow(0 10px 24px rgba(174, 0, 1, 0.45)); }
+
+.crest-lion {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 3rem;
+  transform: translateY(-6px);
+}
+
+.reveal-kicker {
+  color: var(--text-dim);
+  font-size: 0.95rem;
+  margin-bottom: 0.3rem;
+}
+
+.reveal-house {
+  font-weight: 800;
+  font-size: 1.7rem;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.8rem;
+}
+
+.reveal-house span {
+  display: block;
+  font-size: 2.3rem;
+  letter-spacing: 0.06em;
+  background: linear-gradient(90deg, #d3a625, #f4d03f, #ae0001, #d3a625);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 4s linear infinite;
+}
+
+.reveal-sub {
+  color: var(--text-dim);
+  font-size: 0.95rem;
+  margin-bottom: 1.6rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Confetti
+--------------------------------------------------------------------------- */
+.confetti {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
   pointer-events: none;
 }
 
-.item .name { font-weight: 500; }
-
-.item .when {
-  color: var(--text-dim);
-  font-size: 0.78rem;
-}
-
-.item .btn-delete {
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--text-dim);
-  border-radius: 9px;
-  padding: 0.3rem 0.7rem;
-  font-size: 0.82rem;
+.confetti span {
+  position: absolute;
+  top: -4%;
+  width: 9px;
+  height: 14px;
+  border-radius: 2px;
   opacity: 0;
-  transition: all 0.2s ease;
+  animation-name: confettiFall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
 }
 
-.item:hover .btn-delete { opacity: 1; }
-
-.item .btn-delete:hover {
-  color: #f87171;
-  border-color: rgba(248, 113, 113, 0.4);
-  background: rgba(248, 113, 113, 0.08);
-}
-
-.items .empty,
-.items .loading {
-  text-align: center;
-  color: var(--text-dim);
-  padding: 2rem 1rem;
-  border: 1px dashed var(--border);
-  border-radius: 12px;
-  font-size: 0.95rem;
+@keyframes confettiFall {
+  0%   { opacity: 1; transform: translateY(0) rotate(0deg); }
+  100% { opacity: 0.9; transform: translateY(110vh) rotate(calc(var(--spin, 1) * 720deg)); }
 }
 
 /* ---------------------------------------------------------------------------

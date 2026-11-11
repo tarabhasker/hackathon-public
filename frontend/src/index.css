@@ -30,6 +30,19 @@ body {
   min-height: 100vh;
 }
 
+/* Full-height layout: content fills the viewport, footer sits at the bottom */
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+#root > main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
 /* ---------------------------------------------------------------------------
    Keyframes
 --------------------------------------------------------------------------- */
@@ -190,7 +203,10 @@ body {
 .hero {
   position: relative;
   overflow: hidden;
-  padding: 7rem 0 6rem;
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 3rem 0;
   text-align: center;
 }
 
@@ -298,10 +314,14 @@ body {
 /* ---------------------------------------------------------------------------
    Demo card
 --------------------------------------------------------------------------- */
-.demo-section { padding: 2rem 0 6rem; }
+.demo-section {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 3rem 0;
+}
 
-/* Quiz as its own page: center it vertically-ish */
-.quiz-page { padding-top: 4.5rem; min-height: calc(100vh - 220px); }
+.demo-section .container { width: 100%; }
 
 .demo-card {
   max-width: 620px;
@@ -513,17 +533,6 @@ body {
 @keyframes confettiFall {
   0%   { opacity: 1; transform: translateY(0) rotate(0deg); }
   100% { opacity: 0.9; transform: translateY(110vh) rotate(calc(var(--spin, 1) * 720deg)); }
-}
-
-/* ---------------------------------------------------------------------------
-   Footer
---------------------------------------------------------------------------- */
-.site-footer {
-  border-top: 1px solid var(--border);
-  padding: 0.75rem 0;
-  text-align: center;
-  color: var(--text-dim);
-  font-size: 0.78rem;
 }
 
 /* ---------------------------------------------------------------------------

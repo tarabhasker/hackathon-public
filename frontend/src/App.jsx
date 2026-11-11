@@ -13,9 +13,6 @@ export default function App() {
           <Route path="/quiz" element={<Quiz />} />
         </Routes>
       </main>
-      <footer className="site-footer">
-        <div className="container">&copy; 2026 Hackathon Project</div>
-      </footer>
     </BrowserRouter>
   )
 }

@@ -17,3 +17,9 @@ node_modules/
 # Env
 .env
 .env.local
+
+# build stamp
+.docker-build-stamp
+
+# build output
+dist/

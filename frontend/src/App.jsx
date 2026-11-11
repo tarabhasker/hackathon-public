@@ -120,11 +120,24 @@ function Confetti() {
 }
 
 function Reveal({ name, entryNumber, onClose }) {
+  // Drop your image at frontend/public/surprise.png and it shows here;
+  // until then (or if it fails to load) the drawn crest is the fallback
+  const [imgFailed, setImgFailed] = useState(false)
+
   return (
     <div className="overlay" role="dialog" aria-modal="true" onClick={onClose}>
       <Confetti />
       <div className="reveal-card" onClick={(e) => e.stopPropagation()}>
-        <LionCrest />
+        {imgFailed ? (
+          <LionCrest />
+        ) : (
+          <img
+            className="reveal-image"
+            src="/surprise.png"
+            alt="Your surprise result"
+            onError={() => setImgFailed(true)}
+          />
+        )}
         <p className="reveal-kicker">The results are in, {name}…</p>
         <h3 className="reveal-house">
           You are <span>GRYFFINDOR</span>

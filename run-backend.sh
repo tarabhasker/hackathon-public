@@ -35,4 +35,4 @@ exec docker run --rm --name hackathon-backend -p 127.0.0.1:5001:5001 \
   -v hackathon-db:/data \
   -e DATABASE_PATH=/data/app.db \
   "$IMAGE" \
-  uvicorn main:app --host 0.0.0.0 --port 5001 --reload
+  sh -c "alembic upgrade head && exec uvicorn main:app --host 0.0.0.0 --port 5001 --reload"

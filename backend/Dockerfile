@@ -9,4 +9,5 @@ COPY . .
 
 EXPOSE 5001
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5001"]
+# Apply pending migrations, then serve
+CMD ["sh", "-c", "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 5001"]

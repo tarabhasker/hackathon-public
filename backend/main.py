@@ -1,6 +1,5 @@
 import os
 import sqlite3
-from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -24,21 +23,8 @@ ALLOWED_ORIGINS = [
 
 
 # --- Database (SQLite, no server needed) -------------------------------------
-
-def init_db() -> None:
-    db = sqlite3.connect(DATABASE)
-    db.execute(
-        """
-        CREATE TABLE IF NOT EXISTS items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    db.commit()
-    db.close()
-
+# Schema is managed by Alembic migrations (backend/alembic/versions/),
+# applied automatically before the server starts — see run-backend.sh.
 
 def get_db():
     """One connection per request, closed afterwards."""
@@ -50,13 +36,7 @@ def get_db():
         db.close()
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    init_db()
-    yield
-
-
-app = FastAPI(title="Hackathon API", lifespan=lifespan)
+app = FastAPI(title="Hackathon API")
 
 app.add_middleware(
     CORSMiddleware,

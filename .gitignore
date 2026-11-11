@@ -23,3 +23,6 @@ node_modules/
 
 # build output
 dist/
+
+# python cache
+__pycache__/

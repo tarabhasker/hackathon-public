@@ -1,6 +1,12 @@
 # macOS
 .DS_Store
 
+# Python
+venv/
+__pycache__/
+*.pyc
+*.db
+
 # Node (if dependencies are added later)
 node_modules/
 

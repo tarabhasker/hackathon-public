@@ -36,7 +36,7 @@ export default function Home() {
           </span>
         </div>
         <div className="cta">
-          <Link to="/quiz" className="btn btn-gradient btn-lg">Take the quiz</Link>
+          <Link to="/quiz" className="btn btn-gradient btn-lg">Take the quiz ✨</Link>
         </div>
       </div>
     </header>

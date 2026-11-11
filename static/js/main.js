@@ -1,11 +1,73 @@
-// Custom JavaScript — Bootstrap's JS bundle is already loaded before this file
-document.addEventListener('DOMContentLoaded', async () => {
-  // Quick demo that the Flask backend is reachable
+// Frontend <-> backend wiring. Bootstrap's JS bundle is already loaded.
+
+const statusBadge = document.getElementById('backend-status');
+const form = document.getElementById('item-form');
+const nameInput = document.getElementById('item-name');
+const list = document.getElementById('item-list');
+
+async function checkBackend() {
   try {
     const res = await fetch('/api/health');
     const data = await res.json();
-    console.log('Backend status:', data.status);
-  } catch (err) {
-    console.warn('Backend not reachable:', err);
+    statusBadge.textContent = data.status;
+    statusBadge.className = 'badge bg-success';
+  } catch {
+    statusBadge.textContent = 'offline';
+    statusBadge.className = 'badge bg-danger';
   }
+}
+
+function renderItems(items) {
+  list.innerHTML = '';
+  if (items.length === 0) {
+    list.innerHTML =
+      '<li class="list-group-item text-body-secondary">No items yet — add one above.</li>';
+    return;
+  }
+  for (const item of items) {
+    const li = document.createElement('li');
+    li.className = 'list-group-item d-flex justify-content-between align-items-center';
+
+    const label = document.createElement('span');
+    label.textContent = item.name;
+
+    const del = document.createElement('button');
+    del.className = 'btn btn-sm btn-outline-danger';
+    del.textContent = 'Delete';
+    del.addEventListener('click', () => deleteItem(item.id));
+
+    li.append(label, del);
+    list.appendChild(li);
+  }
+}
+
+async function loadItems() {
+  const res = await fetch('/api/items');
+  renderItems(await res.json());
+}
+
+async function addItem(name) {
+  await fetch('/api/items', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  await loadItems();
+}
+
+async function deleteItem(id) {
+  await fetch(`/api/items/${id}`, { method: 'DELETE' });
+  await loadItems();
+}
+
+form.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const name = nameInput.value.trim();
+  if (!name) return;
+  nameInput.value = '';
+  await addItem(name);
+  nameInput.focus();
 });
+
+checkBackend();
+loadItems();

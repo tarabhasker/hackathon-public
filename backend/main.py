@@ -1,18 +1,26 @@
+import os
 import sqlite3
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
-DATABASE = BASE_DIR / "app.db"
+# Overridable so Docker can point it at a mounted volume
+DATABASE = Path(os.environ.get("DATABASE_PATH", BASE_DIR / "app.db"))
+
+# Frontend dev server origins allowed to call this API
+ALLOWED_ORIGINS = [
+    "http://127.0.0.1:3000",
+    "http://localhost:3000",
+    "http://127.0.0.1:3001",
+    "http://localhost:3001",
+]
 
 
 # --- Database (SQLite, no server needed) -------------------------------------
@@ -50,8 +58,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Hackathon API", lifespan=lifespan)
 
-app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
-templates = Jinja2Templates(directory=BASE_DIR / "templates")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # --- Request/response models --------------------------------------------------
@@ -60,14 +73,12 @@ class ItemCreate(BaseModel):
     name: str
 
 
-# --- Pages --------------------------------------------------------------------
-
-@app.get("/", response_class=HTMLResponse)
-def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
-
-
 # --- API ------------------------------------------------------------------------
+
+@app.get("/")
+def root():
+    return {"service": "Hackathon API", "docs": "/docs", "health": "/api/health"}
+
 
 @app.get("/api/health")
 def health():

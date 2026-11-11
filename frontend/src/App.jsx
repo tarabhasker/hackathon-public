@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 
-// The backend runs separately (./run-backend.sh) on this address
-const API_BASE = 'http://127.0.0.1:5001'
+// In dev the backend runs separately (./run-backend.sh); in production
+// the backend serves this app itself, so relative URLs hit the same origin
+const API_BASE = import.meta.env.DEV ? 'http://127.0.0.1:5001' : ''
 
 function Navbar() {
   return (

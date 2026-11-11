@@ -1,12 +1,17 @@
 import os
-from pathlib import Path
 
 from alembic import context
 from sqlalchemy import create_engine
 
-# Same resolution as main.py: env var first, local file as fallback
-BASE_DIR = Path(__file__).resolve().parents[1]
-DB_URL = f"sqlite:///{os.environ.get('DATABASE_PATH', BASE_DIR / 'app.db')}"
+# Same resolution and normalization as main.py
+DB_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql+psycopg://hackathon:hackathon@localhost:5432/hackathon",
+)
+if DB_URL.startswith("postgres://"):
+    DB_URL = DB_URL.replace("postgres://", "postgresql+psycopg://", 1)
+elif DB_URL.startswith("postgresql://"):
+    DB_URL = DB_URL.replace("postgresql://", "postgresql+psycopg://", 1)
 
 # No ORM models; migrations are written by hand
 target_metadata = None

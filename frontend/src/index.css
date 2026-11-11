@@ -1,1 +1,346 @@
-/* Custom styles — overrides and additions on top of Bootstrap */
+/* ---------------------------------------------------------------------------
+   Design tokens
+--------------------------------------------------------------------------- */
+:root {
+  --bg: #0b1020;
+  --bg-soft: #111735;
+  --surface: rgba(255, 255, 255, 0.04);
+  --surface-hover: rgba(255, 255, 255, 0.07);
+  --border: rgba(255, 255, 255, 0.09);
+  --text: #e7ebf4;
+  --text-dim: #8b93ab;
+  --accent-1: #6366f1;
+  --accent-2: #a855f7;
+  --accent-3: #22d3ee;
+  --gradient: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+  --radius: 16px;
+  --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+
+* {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+body {
+  background:
+    radial-gradient(1100px 500px at 80% -10%, rgba(99, 102, 241, 0.18), transparent 60%),
+    radial-gradient(900px 500px at 10% 10%, rgba(168, 85, 247, 0.14), transparent 60%),
+    var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+/* ---------------------------------------------------------------------------
+   Keyframes
+--------------------------------------------------------------------------- */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes itemIn {
+  from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes itemOut {
+  to { opacity: 0; transform: translateX(24px) scale(0.97); }
+}
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.55); }
+  60%      { box-shadow: 0 0 0 8px rgba(52, 211, 153, 0); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-14px); }
+}
+
+@keyframes shimmer {
+  to { background-position: 200% center; }
+}
+
+/* ---------------------------------------------------------------------------
+   Navbar
+--------------------------------------------------------------------------- */
+.site-nav {
+  background: rgba(11, 16, 32, 0.65) !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border);
+}
+
+.site-nav .navbar-brand {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: var(--gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent !important;
+}
+
+.site-nav .nav-link {
+  color: var(--text-dim);
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.site-nav .nav-link:hover,
+.site-nav .nav-link.active {
+  color: var(--text);
+}
+
+/* ---------------------------------------------------------------------------
+   Hero
+--------------------------------------------------------------------------- */
+.hero {
+  position: relative;
+  overflow: hidden;
+  padding: 7rem 0 6rem;
+  text-align: center;
+}
+
+.hero > .container { position: relative; z-index: 1; }
+
+.hero-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.5;
+  pointer-events: none;
+  animation: float 9s ease-in-out infinite;
+}
+
+.hero-orb.one {
+  width: 340px; height: 340px;
+  background: var(--accent-1);
+  top: -120px; right: 8%;
+}
+
+.hero-orb.two {
+  width: 280px; height: 280px;
+  background: var(--accent-2);
+  bottom: -140px; left: 6%;
+  animation-delay: -4.5s;
+}
+
+.hero h1 {
+  font-size: clamp(2.6rem, 6vw, 4.2rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  animation: fadeUp 0.7s ease both;
+}
+
+.hero h1 .gradient-text {
+  background: linear-gradient(90deg, var(--accent-1), var(--accent-2), var(--accent-3), var(--accent-1));
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 6s linear infinite;
+}
+
+.hero .lead {
+  color: var(--text-dim);
+  max-width: 540px;
+  margin: 1.2rem auto 0;
+  font-size: 1.1rem;
+  animation: fadeUp 0.7s ease 0.12s both;
+}
+
+.hero .status-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1.4rem;
+  padding: 0.45rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  animation: fadeUp 0.7s ease 0.24s both;
+}
+
+.status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #475069;
+}
+
+.status-dot.ok {
+  background: #34d399;
+  animation: pulse 2s ease-out infinite;
+}
+
+.status-dot.offline { background: #f87171; }
+
+.hero .cta {
+  margin-top: 2.2rem;
+  animation: fadeUp 0.7s ease 0.36s both;
+}
+
+.btn-gradient {
+  background: var(--gradient);
+  border: none;
+  color: #fff;
+  font-weight: 600;
+  padding: 0.7rem 1.8rem;
+  border-radius: 12px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.35);
+}
+
+.btn-gradient:hover {
+  color: #fff;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(99, 102, 241, 0.5);
+}
+
+.btn-gradient:active { transform: translateY(0); }
+
+/* ---------------------------------------------------------------------------
+   Demo card
+--------------------------------------------------------------------------- */
+.demo-section { padding: 2rem 0 6rem; }
+
+.demo-card {
+  max-width: 620px;
+  margin: 0 auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2rem;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: var(--shadow-lg);
+  animation: fadeUp 0.7s ease 0.2s both;
+}
+
+.demo-card h2 {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-size: 1.4rem;
+}
+
+.demo-card .hint {
+  color: var(--text-dim);
+  font-size: 0.92rem;
+  margin-bottom: 1.5rem;
+}
+
+.item-form {
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: 1.25rem;
+}
+
+.item-form input {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  padding: 0.65rem 1rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.item-form input::placeholder { color: #5b6378; }
+
+.item-form input:focus {
+  outline: none;
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text);
+  border-color: var(--accent-1);
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.18);
+}
+
+/* ---------------------------------------------------------------------------
+   Items list
+--------------------------------------------------------------------------- */
+.items { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; }
+
+.item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.8rem 1.1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  animation: itemIn 0.3s ease both;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.item:hover {
+  background: var(--surface-hover);
+  border-color: rgba(255, 255, 255, 0.16);
+  transform: translateX(3px);
+}
+
+.item.removing {
+  animation: itemOut 0.25s ease forwards;
+  pointer-events: none;
+}
+
+.item .name { font-weight: 500; }
+
+.item .when {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+}
+
+.item .btn-delete {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-dim);
+  border-radius: 9px;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.82rem;
+  opacity: 0;
+  transition: all 0.2s ease;
+}
+
+.item:hover .btn-delete { opacity: 1; }
+
+.item .btn-delete:hover {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.4);
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.items .empty,
+.items .loading {
+  text-align: center;
+  color: var(--text-dim);
+  padding: 2rem 1rem;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  font-size: 0.95rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Footer
+--------------------------------------------------------------------------- */
+.site-footer {
+  border-top: 1px solid var(--border);
+  padding: 1.6rem 0;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Accessibility: respect reduced-motion preferences
+--------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

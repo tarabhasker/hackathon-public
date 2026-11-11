@@ -6,9 +6,9 @@ const API_BASE = import.meta.env.DEV ? 'http://127.0.0.1:5001' : ''
 
 function Navbar() {
   return (
-    <nav className="navbar navbar-expand-lg bg-body-tertiary">
+    <nav className="navbar navbar-expand-lg site-nav sticky-top">
       <div className="container">
-        <a className="navbar-brand fw-bold" href="#">Hackathon</a>
+        <a className="navbar-brand" href="#">Hackathon</a>
         <button
           className="navbar-toggler"
           type="button"
@@ -35,27 +35,49 @@ function Navbar() {
 }
 
 function Hero({ backendStatus }) {
-  const badgeClass =
-    backendStatus === 'ok' ? 'bg-success' :
-    backendStatus === 'offline' ? 'bg-danger' : 'bg-secondary'
+  const ok = backendStatus === 'ok'
+  const offline = backendStatus === 'offline'
 
   return (
-    <header className="py-5 bg-primary text-white text-center">
-      <div className="container py-4">
-        <h1 className="display-4 fw-bold">Hackathon Project</h1>
-        <p className="lead mb-1">React + Bootstrap frontend · FastAPI backend · SQLite database</p>
-        <p className="mb-4">
-          Backend status: <span className={`badge ${badgeClass}`}>{backendStatus}</span>
+    <header className="hero">
+      <div className="hero-orb one" aria-hidden="true"></div>
+      <div className="hero-orb two" aria-hidden="true"></div>
+      <div className="container">
+        <h1>
+          Build something
+          <br />
+          <span className="gradient-text">worth demoing</span>
+        </h1>
+        <p className="lead">
+          React &amp; Bootstrap up front, FastAPI behind, Postgres underneath.
+          Wired, migrated, and ready for your idea.
         </p>
-        <a href="#demo" className="btn btn-light btn-lg">Try the demo</a>
+        <div>
+          <span className="status-row">
+            <span className={`status-dot ${ok ? 'ok' : offline ? 'offline' : ''}`}></span>
+            {ok ? 'Backend connected' : offline ? 'Backend offline' : 'Checking backend…'}
+          </span>
+        </div>
+        <div className="cta">
+          <a href="#demo" className="btn btn-gradient btn-lg">Try the demo</a>
+        </div>
       </div>
     </header>
   )
 }
 
+function timeAgo(isoString) {
+  const seconds = Math.floor((Date.now() - new Date(isoString + 'Z')) / 1000)
+  if (seconds < 60) return 'just now'
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
+  return `${Math.floor(seconds / 86400)}d ago`
+}
+
 function ItemsDemo() {
   const [items, setItems] = useState(null) // null = loading
   const [name, setName] = useState('')
+  const [removing, setRemoving] = useState(new Set())
 
   async function loadItems() {
     const res = await fetch(`${API_BASE}/api/items`)
@@ -75,9 +97,18 @@ function ItemsDemo() {
     await loadItems()
   }
 
-  async function deleteItem(id) {
-    await fetch(`${API_BASE}/api/items/${id}`, { method: 'DELETE' })
-    await loadItems()
+  function deleteItem(id) {
+    // Play the exit animation, then actually delete
+    setRemoving((prev) => new Set(prev).add(id))
+    setTimeout(async () => {
+      await fetch(`${API_BASE}/api/items/${id}`, { method: 'DELETE' })
+      setRemoving((prev) => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+      await loadItems()
+    }, 250)
   }
 
   useEffect(() => {
@@ -85,57 +116,57 @@ function ItemsDemo() {
   }, [])
 
   return (
-    <section id="demo" className="py-5">
-      <div className="container" style={{ maxWidth: 640 }}>
-        <h2 className="mb-1">Items demo</h2>
-        <p className="text-body-secondary mb-4">
-          Everything below goes through the FastAPI backend and is stored in SQLite.
-        </p>
+    <section id="demo" className="demo-section">
+      <div className="container">
+        <div className="demo-card">
+          <h2>Items demo</h2>
+          <p className="hint">
+            Everything below round-trips through FastAPI into Postgres.
+          </p>
 
-        <form onSubmit={addItem} className="input-group mb-3">
-          <input
-            type="text"
-            className="form-control"
-            placeholder="New item name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            autoComplete="off"
-          />
-          <button className="btn btn-primary" type="submit">Add</button>
-        </form>
+          <form onSubmit={addItem} className="item-form">
+            <input
+              type="text"
+              placeholder="Type something and press Enter…"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              autoComplete="off"
+            />
+            <button className="btn btn-gradient" type="submit">Add</button>
+          </form>
 
-        <ul className="list-group">
-          {items === null ? (
-            <li className="list-group-item text-body-secondary">Loading…</li>
-          ) : items.length === 0 ? (
-            <li className="list-group-item text-body-secondary">
-              No items yet — add one above.
-            </li>
-          ) : (
-            items.map((item) => (
-              <li
-                key={item.id}
-                className="list-group-item d-flex justify-content-between align-items-center"
-              >
-                <span>{item.name}</span>
-                <button
-                  className="btn btn-sm btn-outline-danger"
-                  onClick={() => deleteItem(item.id)}
+          <ul className="items">
+            {items === null ? (
+              <li className="loading">Loading…</li>
+            ) : items.length === 0 ? (
+              <li className="empty">Nothing here yet — add the first item above.</li>
+            ) : (
+              items.map((item, i) => (
+                <li
+                  key={item.id}
+                  className={`item ${removing.has(item.id) ? 'removing' : ''}`}
+                  style={{ animationDelay: `${Math.min(i * 45, 300)}ms` }}
                 >
-                  Delete
-                </button>
-              </li>
-            ))
-          )}
-        </ul>
+                  <div>
+                    <div className="name">{item.name}</div>
+                    <div className="when">{timeAgo(item.created_at)}</div>
+                  </div>
+                  <button className="btn-delete" onClick={() => deleteItem(item.id)}>
+                    Delete
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
       </div>
     </section>
   )
 }
 
 export default function App() {
-  const [backendStatus, setBackendStatus] = useState('checking…')
+  const [backendStatus, setBackendStatus] = useState('checking')
 
   useEffect(() => {
     fetch(`${API_BASE}/api/health`)
@@ -151,10 +182,8 @@ export default function App() {
       <main>
         <ItemsDemo />
       </main>
-      <footer className="py-4 bg-body-tertiary">
-        <div className="container text-center text-body-secondary">
-          <small>&copy; 2026 Hackathon Project</small>
-        </div>
+      <footer className="site-footer">
+        <div className="container">&copy; 2026 Hackathon Project</div>
       </footer>
     </>
   )

@@ -300,6 +300,9 @@ body {
 --------------------------------------------------------------------------- */
 .demo-section { padding: 2rem 0 6rem; }
 
+/* Quiz as its own page: center it vertically-ish */
+.quiz-page { padding-top: 4.5rem; min-height: calc(100vh - 220px); }
+
 .demo-card {
   max-width: 620px;
   margin: 0 auto;

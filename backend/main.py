@@ -4,6 +4,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import create_engine, text
@@ -94,10 +95,28 @@ def submit_quiz(entry: QuizEntry):
 # The deploy image builds the React app into frontend-dist/; when present,
 # this app serves it, so frontend and API share one origin. In local dev the
 # directory doesn't exist and Vite serves the frontend instead.
+#
+# The catch-all is an SPA fallback: client-side routes like /quiz have no file
+# on disk, so any unknown path serves index.html and React Router takes over.
 
 FRONTEND_DIST = BASE_DIR / "frontend-dist"
 if FRONTEND_DIST.is_dir():
-    app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
+    app.mount(
+        "/assets",
+        StaticFiles(directory=FRONTEND_DIST / "assets"),
+        name="assets",
+    )
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def spa(path: str):
+        candidate = (FRONTEND_DIST / path).resolve()
+        if (
+            path
+            and candidate.is_relative_to(FRONTEND_DIST)
+            and candidate.is_file()
+        ):
+            return FileResponse(candidate)
+        return FileResponse(FRONTEND_DIST / "index.html")
 else:
     @app.get("/")
     def root():

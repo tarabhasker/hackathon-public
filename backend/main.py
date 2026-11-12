@@ -413,7 +413,8 @@ def list_events(authorization: str | None = Header(default=None)):
         previews: dict[int, list[str]] = {}
         for r in conn.execute(text(
             "SELECT event_id, name FROM ("
-            "  SELECT m.event_id, COALESCE(p.name, split_part(u.email, '@', 1)) AS name, "
+            "  SELECT m.event_id, "
+            "  COALESCE(p.name, initcap(replace(split_part(u.email, '@', 1), '.', ' '))) AS name, "
             "  ROW_NUMBER() OVER (PARTITION BY m.event_id ORDER BY m.joined_at DESC) AS rn "
             "  FROM event_members m JOIN users u ON u.id = m.user_id "
             "  LEFT JOIN people p ON p.id = u.person_id"

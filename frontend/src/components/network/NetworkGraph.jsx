@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { assetUrl } from '../../api'
-import { FLAT_RINGS, GRAPH_H, GRAPH_W, SHELLS, initials, layoutNodes, sphereLayout } from '../../lib/network'
+import { FLAT_RINGS, GRAPH_H, GRAPH_W, SHELLS, evidenceIndex, initials, layoutNodes, ordinal, sphereLayout } from '../../lib/network'
 
 // Planet colours for people who aren't on the highlighted path (--avatar-1..6 in tokens.css)
 const AVATAR_FILLS = 6
@@ -29,10 +29,11 @@ function project(p, sinY, cosY, sinP, cosP) {
   return { x: CX + x * scale * VIEW_SCALE, y: CY + y * scale * VIEW_SCALE, z, scale }
 }
 
-// Sun, planets, moons, and moons of moons
-const bodySize = (depth) => (depth === 0 ? 84 : depth === 1 ? 56 : depth === 2 ? 40 : 32)
+// Sun, planets, moons, and moons of moons — one size per degree of connection
+const BODY_SIZES = [84, 56, 40, 32, 28, 25, 23]
+const bodySize = (depth) => BODY_SIZES[Math.min(depth, BODY_SIZES.length - 1)]
 
-function Body({ node, index, role, register, onSelect, onHover }) {
+function Body({ node, index, role, tie, register, onSelect, onHover }) {
   // role: 'you' | 'target' | 'path' | 'other'
   const size = bodySize(node.depth)
   const label = role === 'you' ? 'YOU' : initials(node.name)
@@ -81,8 +82,21 @@ function Body({ node, index, role, register, onSelect, onHover }) {
       <span className="nw-node__label">{role === 'you' ? 'You' : node.name}</span>
       <span role="tooltip" className="nw-node__tip">
         <span className="nw-node__tip-name">{node.name}</span>
-        <span className="nw-node__tip-row">{node.title || 'Role not listed'}</span>
-        <span className="nw-node__tip-row">{node.company || 'Company not listed'}</span>
+        <span className="nw-node__tip-row">
+          {[node.title, node.company].filter(Boolean).join('  ·  ') || 'Profile not filled in yet'}
+        </span>
+        {tie && (
+          <span className="nw-node__tip-tie">
+            <span className="nw-node__tip-meta">
+              <span className="nw-node__tip-degree">{ordinal(node.depth)}-degree connection</span>
+              <b className="nw-node__tip-pct">{Math.round((node.strength || 0) * 100)}%</b>
+            </span>
+            <i className="nw-node__tip-bar" aria-hidden="true">
+              <i style={{ width: `${Math.round((node.strength || 0) * 100)}%` }} />
+            </i>
+            {tie.how && <span className="nw-node__tip-how">{tie.how}</span>}
+          </span>
+        )}
       </span>
     </button>
   )
@@ -127,22 +141,35 @@ export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, m
     return out
   }, [nodes])
   const targetId = path.length > 1 ? path[path.length - 1] : null
+  const byId = useMemo(() => Object.fromEntries(nodes.map((n) => [n.id, n])), [nodes])
+  const youId = useMemo(() => nodes.find((n) => n.depth === 0)?.id ?? null, [nodes])
+  const evidence = useMemo(() => evidenceIndex(edges), [edges])
   const [fitRef, fit] = useFitScale()
 
   const canvasRef = useRef(null)
   const stageRef = useRef(null)
   const elements = useRef({})
-  const view = useRef({ morph: mode === '3d' ? 1 : 0, yaw: START_YAW, pitch: START_PITCH, hovering: false, dragging: false, moved: false })
+  const view = useRef({ morph: mode === '3d' ? 1 : 0, yaw: START_YAW, pitch: START_PITCH, hovering: false, hotId: null, dragging: false, moved: false })
   const register = (id, el) => {
     if (el) elements.current[id] = el
     else delete elements.current[id]
   }
 
+  // Who's directly tied to whom, for hover isolation
+  const adjacency = useMemo(() => {
+    const adj = {}
+    edges.forEach((e) => {
+      ;(adj[e.a] ??= new Set()).add(e.b)
+      ;(adj[e.b] ??= new Set()).add(e.a)
+    })
+    return adj
+  }, [edges])
+
   // Latest data for the animation loop, without restarting it on every change
   const scene = useRef({})
   useEffect(() => {
-    scene.current = { nodes, edges, path, points, flat, mode, resolution: Math.min(fit * zoom, 2) }
-  }, [nodes, edges, path, points, flat, mode, fit, zoom])
+    scene.current = { nodes, edges, path, points, flat, mode, adjacency, resolution: Math.min(fit * zoom, 2) }
+  }, [nodes, edges, path, points, flat, mode, adjacency, fit, zoom])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -152,6 +179,8 @@ export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, m
     const line = tokens.getPropertyValue('--ds-line-strong').trim() || '#D9D2C0'
     const tieStrong = tokens.getPropertyValue('--tie-strong').trim() || '#5E8676'
     const tieWeak = tokens.getPropertyValue('--tie-weak').trim() || '#A8997C'
+    const surface = tokens.getPropertyValue('--ds-surface').trim() || '#FFFFFF'
+    const ink = tokens.getPropertyValue('--secondary').trim() || '#1B1613'
     const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     let frame = 0
     let last = performance.now()
@@ -161,7 +190,7 @@ export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, m
       const dt = Math.min((now - last) / 1000, 0.05)
       last = now
       const v = view.current
-      const { nodes: people = [], edges: links = [], path: route = [], points: at = {}, flat: flatAt = {}, mode: shape = '3d', resolution = 1 } = scene.current
+      const { nodes: people = [], edges: links = [], path: route = [], points: at = {}, flat: flatAt = {}, mode: shape = '3d', adjacency: adj = {}, resolution = 1 } = scene.current
       // the sphere stops turning while you hover or drag, so nobody slips away
       // ease between the flat map (0) and the sphere (1)
       const goal = shape === '3d' ? 1 : 0
@@ -255,11 +284,15 @@ export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, m
         })
       }
 
-      // Ties between people: plain ones first, the highlighted path on top
+      // Ties between people: every link among shown people is drawn — the
+      // path tree solid, cross-ties between your connections fainter. Hovering
+      // someone isolates their ties and labels each with its strength.
       const onRoute = []
+      const hotLabels = []
       ctx.lineCap = 'round'
       const parentOf = {}
       for (const person of people) parentOf[person.id] = person.via
+      const hot = v.hotId
       for (const link of links) {
         const a = screen[link.a]
         const b = screen[link.b]
@@ -270,17 +303,26 @@ export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, m
           onRoute.push(ia < ib ? [a, b] : [b, a])
           continue
         }
-        if (parentOf[link.a] !== link.b && parentOf[link.b] !== link.a) continue
+        const onTree = parentOf[link.a] === link.b || parentOf[link.b] === link.a
+        const touchesHot = hot != null && (link.a === hot || link.b === hot)
         const depth = (a.scale + b.scale) / 2 // >1 near, <1 far
-        // strong ties: solid sage; weak ties: dashed stone. Far ones fade a little.
-        ctx.globalAlpha = Math.max(0.45, Math.min(0.95, 0.75 + (depth - 1) * 1.5))
-        ctx.strokeStyle = link.weak ? tieWeak : tieStrong
-        ctx.lineWidth = (link.weak ? 1.8 : 2.4) * depth
-        ctx.setLineDash(link.weak ? [6, 6] : [])
+        // every tie is a solid line; its thickness and presence carry the
+        // strength (hover for the exact %). Far ones fade a little.
+        const w = Math.max(0.05, Math.min(1, link.weight ?? 0.5))
+        let alpha = (onTree ? 0.4 + w * 0.5 : 0.18 + w * 0.3) + (depth - 1) * 0.8
+        alpha = Math.max(0.15, Math.min(0.95, alpha))
+        if (hot != null) alpha = touchesHot ? 0.95 : alpha * 0.18
+        ctx.globalAlpha = alpha
+        ctx.strokeStyle = touchesHot ? primary : w < 0.3 ? tieWeak : tieStrong
+        ctx.lineWidth = (touchesHot ? 2.8 : (1 + w * 2.4) * (onTree ? 1 : 0.75)) * depth
+        ctx.setLineDash([])
         ctx.beginPath()
         ctx.moveTo(a.x, a.y)
         ctx.lineTo(b.x, b.y)
         ctx.stroke()
+        if (touchesHot && link.weight != null) {
+          hotLabels.push({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, weight: link.weight })
+        }
       }
       ctx.globalAlpha = 1
       for (const [from, to] of onRoute) {
@@ -295,6 +337,28 @@ export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, m
       ctx.setLineDash([])
       ctx.lineDashOffset = 0
 
+      // Strength labels on the hovered person's ties
+      if (hotLabels.length > 0) {
+        ctx.font = '600 11px "Inter", system-ui, sans-serif'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        for (const tag of hotLabels) {
+          const text = `${Math.round(tag.weight * 100)}%`
+          const w = ctx.measureText(text).width + 12
+          ctx.globalAlpha = 0.96
+          ctx.fillStyle = surface
+          ctx.strokeStyle = primary
+          ctx.lineWidth = 1
+          ctx.beginPath()
+          ctx.roundRect(tag.x - w / 2, tag.y - 9, w, 18, 9)
+          ctx.fill()
+          ctx.stroke()
+          ctx.fillStyle = ink
+          ctx.fillText(text, tag.x, tag.y + 0.5)
+        }
+        ctx.globalAlpha = 1
+      }
+
       // Bodies: move, scale and fade with depth; nearer ones stack on top;
       // the bright spot on each sphere faces the sun
       const sun = people.find((n) => n.depth === 0)
@@ -304,9 +368,11 @@ export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, m
         const p = screen[person.id]
         if (!el || !p) continue
         const highlighted = person.depth === 0 || route.includes(person.id)
-        const fade = Math.max(0.35, Math.min(1, 0.8 + (p.scale - 1) * 1.6))
+        let fade = Math.max(0.35, Math.min(1, 0.8 + (p.scale - 1) * 1.6))
+        // hovering someone dims everyone not tied to them
+        if (hot != null && person.id !== hot && !adj[hot]?.has(person.id)) fade *= 0.35
         el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -${bodySize(person.depth) / 2}px) scale(${p.scale})`
-        el.style.opacity = highlighted ? 1 : fade
+        el.style.opacity = highlighted && hot == null ? 1 : hot === person.id ? 1 : fade
         el.style.zIndex = Math.round(1000 - p.z) + (highlighted ? 400 : 0)
         if (sunAt && person.depth > 0) {
           const dx = sunAt.x - p.x
@@ -387,16 +453,23 @@ export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, m
           if (!points[node.id]) return null
           const role =
             node.depth === 0 ? 'you' : node.id === targetId ? 'target' : path.includes(node.id) ? 'path' : 'other'
+          const viaName = node.via != null && node.via !== youId ? byId[node.via]?.name : null
+          const tie = node.depth > 0
+            ? { how: [evidence(node.via, node.id), viaName ? `via ${viaName}` : null].filter(Boolean).join(' · ') }
+            : null
           return (
             <Body
               key={node.id}
               node={node}
               index={index}
               role={role}
+              tie={tie}
               register={register}
               onSelect={onSelect}
               onHover={(on) => {
                 view.current.hovering = on
+                if (on) view.current.hotId = node.id
+                else if (view.current.hotId === node.id) view.current.hotId = null
               }}
             />
           )

@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
+import EventsPanel from '../components/events/EventsPanel'
 import MobileFind from '../components/network/MobileFind'
 import NetworkGraph from '../components/network/NetworkGraph'
 import PathCard from '../components/network/PathCard'
 import SearchPanel from '../components/network/SearchPanel'
-import { Button, Icon, Notice } from '../components/ui'
+import { Button, Icon, Notice, useToast } from '../components/ui'
+import { api } from '../api'
 import { useAuth } from '../hooks/useAuth'
 import { useCopied } from '../hooks/useCopied'
 import { MOBILE_QUERY, useMediaQuery } from '../hooks/useMediaQuery'
 import { useNetwork } from '../hooks/useNetwork'
 import { usePeopleSearch } from '../hooks/usePeopleSearch'
-import { ctaLabel, describePath, draftMessage } from '../lib/network'
+import { ctaLabel, describePath, draftMessage, ordinal } from '../lib/network'
+import { MAX_DEGREES } from '../hooks/useNetwork'
 
 const ZOOM = { min: 0.6, max: 1.6, step: 0.2 }
 const VIEW_KEY = 'bff.networkView'
@@ -46,6 +49,30 @@ export default function Network() {
   }
   const search = usePeopleSearch(query, { limit: 20 })
   const [ctaDone, copyDraft] = useCopied(2600)
+  const toast = useToast()
+  const [connectingId, setConnectingId] = useState(null)
+  // people connected during this visit, so their rows flip to ✓ at once
+  // (search results keep their original hop counts until the next search)
+  const [justConnected, setJustConnected] = useState(() => new Set())
+
+  // Connect straight from a result row; the graph refreshes with the new tie
+  const connect = async (person) => {
+    setConnectingId(person.id)
+    try {
+      const res = await api(`/api/people/${person.id}/connect`, { method: 'POST', body: {} })
+      toast.success(
+        res.already
+          ? `You and ${person.name} were already connected.`
+          : `You and ${person.name} are now connected.`,
+      )
+      setJustConnected((prev) => new Set(prev).add(person.id))
+      network.refresh()
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setConnectingId(null)
+    }
+  }
 
   // Rows for the result list: search matches, or the closest 2-hop people as suggestions
   const rows = useMemo(() => {
@@ -69,6 +96,11 @@ export default function Network() {
   }, [search.results, scope])
 
   const { target, path, byId, evidence } = network
+  // which degrees actually appear, for the legend
+  const degreesShown = useMemo(
+    () => [...new Set(network.nodes.map((n) => n.depth).filter((d) => d > 0))].sort((a, b) => a - b),
+    [network.nodes],
+  )
   const cta = target ? ctaLabel(path, byId) : ''
   const onCta = () => copyDraft(draftMessage(path, byId, target, query.trim()))
   const heading = search.results ? 'Best matches' : 'Suggested for you'
@@ -89,7 +121,12 @@ export default function Network() {
         ctaDone={ctaDone}
         onCta={onCta}
         onPick={select}
-      />
+        onConnect={connect}
+        connectingId={connectingId}
+        connectedIds={justConnected}
+      >
+        <EventsPanel />
+      </MobileFind>
     )
   }
 
@@ -101,9 +138,26 @@ export default function Network() {
         <div className="nw-head">
           <div>
             <h1>Your network</h1>
-            <span>People within 2 hops of you. Click anyone to see the strongest path.</span>
+            <span>
+              People within {network.degrees} degree{network.degrees === 1 ? '' : 's'} of you.
+              Hover anyone for tie strength; click to see the strongest path.
+            </span>
           </div>
           <div className="nw-zoom">
+            <div className="nw-viewtoggle nw-degrees" role="group" aria-label="Degrees of connection shown">
+              {Array.from({ length: MAX_DEGREES }, (_, i) => i + 1).map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  className="nw-viewtoggle__btn nw-viewtoggle__btn--deg"
+                  aria-pressed={network.degrees === d}
+                  aria-label={`Show ${d} degree${d === 1 ? '' : 's'} of connection`}
+                  onClick={() => network.setDegrees(d)}
+                >
+                  {d}°
+                </button>
+              ))}
+            </div>
             <div className="nw-viewtoggle" role="group" aria-label="Network view">
               {VIEWS.map(({ id: v, label }) => (
                 <button
@@ -141,9 +195,13 @@ export default function Network() {
           )}
 
           <div className="nw-legend">
-            <span><i className="nw-legend__path" />Your path</span>
-            <span><i className="nw-legend__strong" />Strong tie</span>
-            <span><i className="nw-legend__weak" />Weak tie</span>
+            {degreesShown.map((d) => (
+              <span key={d}>
+                <i className="nw-legend__deg" style={{ '--dot': `${Math.max(7, 15 - (d - 1) * 2)}px` }} />
+                {ordinal(d)} degree
+              </span>
+            ))}
+            <span className="nw-legend__hint">Thicker line = stronger tie · hover anyone for exact %</span>
           </div>
 
           {target ? (
@@ -175,8 +233,11 @@ export default function Network() {
           error={search.error}
           activeId={target?.id}
           onPick={select}
+          onConnect={connect}
+          connectingId={connectingId}
+          connectedIds={justConnected}
         />
-        
+        <EventsPanel />
       </aside>
     </div>
   )

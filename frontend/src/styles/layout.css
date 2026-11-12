@@ -649,7 +649,7 @@
 /* Joining spinner on the QR landing page */
 .join-wait { display: grid; place-items: center; padding: 12px 0 4px; color: var(--primary); }
 
-/* --- Admin: overview charts (v3) --------------------------------------------------- */
+/* --- Admin: overview charts (v4 — showtime) ---------------------------------------- */
 .admin-viz {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -657,7 +657,11 @@
   margin-top: 12px;
 }
 .admin-viz__wide { grid-column: 1 / -1; }
-.viz-card { padding: 18px 20px 16px; }
+.viz-card {
+  padding: 18px 20px 16px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.viz-card:hover { transform: translateY(-2px); box-shadow: var(--ds-shadow-2); border-color: var(--ds-line-strong); }
 @media (max-width: 820px) { .admin-viz { grid-template-columns: 1fr; } }
 
 .viz { margin: 0; }
@@ -675,7 +679,7 @@
 .viz-head__sub { font-size: 11.5px; color: var(--secondary-muted); }
 .viz-head__figure { display: flex; align-items: baseline; gap: 8px; }
 .viz-head__figure strong {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 640;
   letter-spacing: -0.02em;
   line-height: 1;
@@ -695,6 +699,65 @@
 .viz-delta--down { background: var(--ds-danger-soft); color: var(--ds-danger-soft-ink); }
 .viz-delta--flat { background: var(--secondary-soft); color: var(--secondary-muted); }
 
+/* --- The hero panel: deep pine, drifting aurora, glowing mint line ------------------ */
+.viz-card--hero {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(640px 300px at 86% -10%, rgba(53, 224, 194, 0.16), transparent 60%),
+    linear-gradient(135deg, #133C37 0%, #0E2B28 58%, #1E4542 100%);
+  border-color: rgba(53, 224, 194, 0.16);
+}
+.viz-card--hero::before,
+.viz-card--hero::after {
+  content: '';
+  position: absolute;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  filter: blur(70px);
+  pointer-events: none;
+  z-index: 0;
+}
+.viz-card--hero::before {
+  top: -240px;
+  right: -80px;
+  background: rgba(53, 224, 194, 0.22);
+  animation: aurora-a 16s ease-in-out infinite alternate;
+}
+.viz-card--hero::after {
+  bottom: -300px;
+  left: -120px;
+  background: rgba(154, 181, 166, 0.14);
+  animation: aurora-b 20s ease-in-out infinite alternate;
+}
+@keyframes aurora-a { to { transform: translate(-120px, 60px) scale(1.15); } }
+@keyframes aurora-b { to { transform: translate(140px, -40px) scale(1.1); } }
+.viz-card--hero > * { position: relative; z-index: 1; }
+
+.viz--hero .viz-head__title { color: #ECFDF5; }
+.viz--hero .viz-head__sub { color: rgba(236, 253, 245, 0.55); }
+.viz--hero .viz-head__figure strong { color: #FFFFFF; font-size: 30px; }
+.viz--hero .viz-delta--up { background: rgba(53, 224, 194, 0.16); color: #7FEBD3; }
+.viz--hero .viz-delta--down { background: rgba(240, 120, 100, 0.18); color: #F6B3A5; }
+.viz--hero .viz-delta--flat { background: rgba(236, 253, 245, 0.1); color: rgba(236, 253, 245, 0.6); }
+
+/* the line itself glows */
+.viz--hero .recharts-area-curve { filter: drop-shadow(0 0 7px rgba(53, 224, 194, 0.55)); }
+
+/* pulsing "live" endpoint */
+.viz-pulse__ring {
+  opacity: 0.45;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: viz-pulse 2.2s ease-out infinite;
+}
+@keyframes viz-pulse {
+  0% { transform: scale(0.35); opacity: 0.55; }
+  70% { transform: scale(1.7); opacity: 0; }
+  100% { transform: scale(1.7); opacity: 0; }
+}
+
 /* Dark pill tooltip, matching the app's snackbars. Values lead, labels follow. */
 .viz-tip {
   display: inline-flex;
@@ -703,6 +766,7 @@
   padding: 5px 10px;
   background: var(--secondary);
   color: var(--secondary-ink);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: var(--ds-radius-sm);
   box-shadow: var(--ds-shadow-2);
   font-size: 12px;
@@ -714,7 +778,7 @@
 .viz-tip span { opacity: 0.75; }
 .viz-tip em { font-style: normal; font-size: 11px; opacity: 0.55; }
 
-/* Horizontal team bars: one measure, one hue; hover lifts a row and dims the rest */
+/* --- Horizontal team bars: gradient fill, shine sweep, hover spotlight -------------- */
 .viz-bars { display: flex; flex-direction: column; gap: 9px; }
 .viz-bar {
   position: relative;
@@ -725,14 +789,14 @@
   min-height: 24px; /* hit target taller than the mark */
   border-radius: var(--ds-radius-sm);
   outline: none;
-  animation: bar-in 0.45s ease backwards;
-  animation-delay: calc(var(--i, 0) * 50ms);
+  animation: bar-in 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) backwards;
+  animation-delay: calc(var(--i, 0) * 60ms);
   transition: opacity 0.18s ease;
 }
 @keyframes bar-in {
-  from { opacity: 0; transform: translateX(-6px); }
+  from { opacity: 0; transform: translateX(-10px); }
 }
-.viz-bars--dim .viz-bar:not(.viz-bar--hot) { opacity: 0.42; }
+.viz-bars--dim .viz-bar:not(.viz-bar--hot) { opacity: 0.38; }
 .viz-bar:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .viz-bar__label {
   font-size: 12.5px;
@@ -741,17 +805,36 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.viz-bar__track { position: relative; height: 14px; }
+.viz-bar__track {
+  position: relative;
+  height: 15px;
+  border-radius: 0 6px 6px 0;
+  background: rgba(14, 143, 117, 0.08);
+}
 .viz-bar__fill {
   position: absolute;
   inset: 0 auto 0 0;
-  border-radius: 0 4px 4px 0; /* rounded data-end, square at the baseline */
-  min-width: 2px;
-  transition: filter 0.15s ease, width 0.5s ease;
+  border-radius: 0 6px 6px 0; /* rounded data-end, square at the baseline */
+  min-width: 3px;
+  overflow: hidden;
+  background: linear-gradient(90deg, #0B6E5B 0%, #0E8F75 55%, #23BA97 100%);
+  transition: width 0.5s ease, box-shadow 0.2s ease;
 }
-.viz-bar--hot .viz-bar__fill { filter: brightness(0.86); }
-.viz-bar--hot .viz-bar__label,
-.viz-bar--hot .viz-bar__value { color: var(--secondary); }
+.viz-bar__fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 32%, rgba(255, 255, 255, 0.4) 50%, transparent 68%);
+  transform: translateX(-130%);
+  animation: bar-shine 1.3s ease both;
+  animation-delay: calc(var(--i, 0) * 60ms + 0.45s);
+}
+@keyframes bar-shine { to { transform: translateX(130%); } }
+.viz-bar--hot .viz-bar__fill {
+  box-shadow: 0 0 14px rgba(14, 143, 117, 0.45);
+}
+.viz-bar--hot .viz-bar__fill::after { animation: bar-shine 0.9s ease both; }
+.viz-bar--hot .viz-bar__label { color: var(--secondary); font-weight: 600; }
 .viz-bar__value {
   font-size: 12.5px;
   font-weight: 600;
@@ -766,49 +849,43 @@
   transform: translateX(-50%);
 }
 
-/* One whole split into parts: 28px tall, 2px surface gaps, share printed inside.
-   Hovering a segment or its legend row highlights both. */
-.viz-split {
-  position: relative;
-  display: flex;
-  gap: 2px;
-  height: 28px;
-  margin: 2px 0 12px;
+/* --- Connections ring: arcs sweep in, hover expands, live center readout ----------- */
+.viz-donut { position: relative; }
+.viz-donut .recharts-sector {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  transition: opacity 0.18s ease, transform 0.22s cubic-bezier(0.2, 0.7, 0.3, 1.4), filter 0.2s ease;
+  cursor: pointer;
 }
-.viz-split__part {
-  position: relative;
-  display: flex;
-  align-items: center;
-  border-radius: 4px;
-  min-width: 3px;
-  overflow: hidden;
-  transform-origin: left;
-  animation: split-in 0.5s ease both;
-  animation-delay: calc(var(--i, 0) * 70ms);
-  transition: opacity 0.18s ease, filter 0.15s ease;
-  outline: none;
+.viz-donut .donut-cell--dim { opacity: 0.3; }
+.viz-donut .donut-cell--hot {
+  transform: scale(1.055);
+  filter: drop-shadow(0 5px 12px rgba(30, 69, 66, 0.3));
 }
-.viz-split--dim .viz-split__part:not(.viz-split__part--hot) { opacity: 0.38; }
-.viz-split__part--hot { filter: brightness(0.9); }
-.viz-split__part:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-.viz-split__part em {
-  font-style: normal;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: #fff;
-  padding-left: 8px;
-  white-space: nowrap;
-}
-@keyframes split-in { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-.viz-tip--split {
+.viz-donut__center {
   position: absolute;
-  bottom: calc(100% + 6px);
-  transform: translateX(-50%);
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 3px;
+  text-align: center;
+  pointer-events: none;
+  padding: 0 18%;
 }
+.viz-donut__center strong {
+  font-size: 27px;
+  font-weight: 640;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--secondary);
+}
+.viz-donut__center span { font-size: 11.5px; color: var(--secondary-muted); }
+.viz-donut__center em { font-style: normal; font-size: 11.5px; font-weight: 600; }
 
 .viz-legend {
   list-style: none;
-  margin: 0;
+  margin: 10px 0 0;
   padding: 0;
   display: flex;
   flex-wrap: wrap;
@@ -822,14 +899,19 @@
   color: var(--secondary-muted);
   transition: opacity 0.18s ease;
   cursor: default;
+  border-radius: 6px;
+  outline: none;
 }
-.viz-legend__item--dim { opacity: 0.38; }
+.viz-legend li:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.viz-legend__item--dim { opacity: 0.35; }
 .viz-legend i { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
 .viz-legend b { font-weight: 600; color: var(--secondary); font-variant-numeric: tabular-nums; }
 
 @media (prefers-reduced-motion: reduce) {
-  .viz-bar, .viz-split__part { animation: none; }
-  .viz-bar__fill { transition: none; }
+  .viz-bar, .viz-pulse__ring { animation: none; }
+  .viz-bar__fill, .viz-card--hero::before, .viz-card--hero::after { animation: none; transition: none; }
+  .viz-bar__fill::after { animation: none; transform: translateX(130%); }
+  .viz-card, .viz-donut .recharts-sector { transition: none; }
 }
 
 /* --- Event cards v2 ------------------------------------------------------------------ */

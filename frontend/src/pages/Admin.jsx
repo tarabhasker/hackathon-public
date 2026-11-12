@@ -77,7 +77,7 @@ export default function Admin() {
         </div>
         <div className="admin-viz">
           <div className="admin-viz__wide">
-            <Card className="viz-card">
+            <Card className="viz-card viz-card--hero">
               <JoinsArea data={overview.joins_by_day} />
             </Card>
           </div>

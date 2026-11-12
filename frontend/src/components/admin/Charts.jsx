@@ -3,24 +3,28 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
   ReferenceDot,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts'
+import { useCountUp } from '../../hooks/useCountUp'
 
 // Categorical palette anchored on the brand teal, validated with the dataviz
-// six-checks script (lightness band, chroma floor, CVD >= 8 adjacent, normal
-// vision >= 15, contrast >= 3:1 on white). Hues are assigned in this fixed
-// order, never cycled.
+// six-checks script (CVD-safe adjacent pairs, contrast >= 3:1 on white).
+// Hues are assigned in this fixed order, never cycled.
 export const CHART_COLORS = [
   '#0E8F75', '#CC8226', '#3E6FB0', '#C25E4C', '#7A5FB5', '#6B7F23', '#C9568F', '#9A5F1E',
 ]
 const ACCENT = CHART_COLORS[0]
-const INK = 'var(--secondary)'
-const MUTED = 'var(--secondary-muted)'
-const GRID = 'var(--ds-line)'
+const MINT = '#35E0C2' // the hero line on the dark panel
+const HERO_INK = '#ECFDF5'
+const HERO_MUTED = 'rgba(236, 253, 245, 0.55)'
+const HERO_GRID = 'rgba(236, 253, 245, 0.09)'
 
 const fmt = (n) => Number(n).toLocaleString()
 const dayLabel = (iso) =>
@@ -38,8 +42,9 @@ function DeltaPill({ now, before, noun = 'prior week' }) {
   )
 }
 
-// Shared card header: title + context on the left, headline figure on the right.
+// Shared card header: title + context on the left, counted-up headline right.
 function VizHead({ title, sub, value, unit, delta }) {
+  const counted = useCountUp(value)
   return (
     <figcaption className="viz-head">
       <div className="viz-head__text">
@@ -47,7 +52,7 @@ function VizHead({ title, sub, value, unit, delta }) {
         {sub && <span className="viz-head__sub">{sub}</span>}
       </div>
       <div className="viz-head__figure">
-        <strong>{fmt(value)}</strong>
+        <strong>{fmt(counted)}</strong>
         {unit && <span className="viz-head__unit">{unit}</span>}
         {delta}
       </div>
@@ -55,7 +60,7 @@ function VizHead({ title, sub, value, unit, delta }) {
   )
 }
 
-// Dark pill tooltip. Values lead, labels follow; recharts positions it at the cursor.
+// Dark pill tooltip. Values lead, labels follow; recharts floats it at the cursor.
 function ChartTip({ active, payload, label, labelFormatter, detail }) {
   if (!active || !payload?.length) return null
   const value = payload[0].value
@@ -68,47 +73,59 @@ function ChartTip({ active, payload, label, labelFormatter, detail }) {
   )
 }
 
-// Event joins over the last 14 days: gradient area, crosshair + cursor tooltip,
-// the peak day direct-labeled, headline total + week-over-week delta up top.
+// "Live" endpoint: a pulsing ring around the latest data point.
+function PulseDot({ cx, cy }) {
+  if (cx == null || cy == null) return null
+  return (
+    <g className="viz-pulse">
+      <circle className="viz-pulse__ring" cx={cx} cy={cy} r={9} fill={MINT} />
+      <circle cx={cx} cy={cy} r={4} fill={MINT} stroke="#0E2B28" strokeWidth={2} />
+    </g>
+  )
+}
+
+// Event joins over the last 14 days: a dark aurora panel, glowing mint line,
+// pulsing live endpoint, direct-labeled peak, crosshair + cursor tooltip.
 export function JoinsArea({ data }) {
   const rows = useMemo(() => data.map((d) => ({ ...d, count: Number(d.count) })), [data])
   const total = rows.reduce((s, r) => s + r.count, 0)
   const last7 = rows.slice(-7).reduce((s, r) => s + r.count, 0)
   const prev7 = rows.slice(-14, -7).reduce((s, r) => s + r.count, 0)
+  const last = rows[rows.length - 1]
   const peak = rows.reduce((best, r) => (r.count > best.count ? r : best), rows[0] || { count: 0 })
   const flat = rows.every((r) => r.count === rows[0]?.count)
   const summary = rows.map((d) => `${dayLabel(d.day)} ${d.count}`).join(', ')
   return (
-    <figure className="viz" role="group" aria-label={`Event joins by day, ${fmt(total)} total: ${summary}`}>
+    <figure className="viz viz--hero" role="group" aria-label={`Event joins by day, ${fmt(total)} total: ${summary}`}>
       <VizHead
         title="Event joins"
         sub="Last 14 days"
         value={total}
         delta={<DeltaPill now={last7} before={prev7} />}
       />
-      <ResponsiveContainer width="100%" height={220}>
-        <AreaChart data={rows} margin={{ top: 22, right: 14, bottom: 0, left: -18 }}>
+      <ResponsiveContainer width="100%" height={230}>
+        <AreaChart data={rows} margin={{ top: 26, right: 18, bottom: 0, left: -16 }}>
           <defs>
             <linearGradient id="joinsFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={ACCENT} stopOpacity={0.3} />
-              <stop offset="60%" stopColor={ACCENT} stopOpacity={0.08} />
-              <stop offset="100%" stopColor={ACCENT} stopOpacity={0} />
+              <stop offset="0%" stopColor={MINT} stopOpacity={0.52} />
+              <stop offset="55%" stopColor={MINT} stopOpacity={0.14} />
+              <stop offset="100%" stopColor={MINT} stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid stroke={GRID} vertical={false} />
+          <CartesianGrid stroke={HERO_GRID} vertical={false} />
           <XAxis
             dataKey="day"
             tickFormatter={dayLabel}
             ticks={[rows[0]?.day, rows[Math.floor(rows.length / 2)]?.day, rows[rows.length - 1]?.day]}
-            tick={{ fontSize: 10.5, fill: MUTED }}
-            axisLine={{ stroke: GRID }}
+            tick={{ fontSize: 10.5, fill: HERO_MUTED }}
+            axisLine={{ stroke: HERO_GRID }}
             tickLine={false}
           />
           <YAxis
             allowDecimals={false}
-            width={44}
+            width={42}
             tickCount={4}
-            tick={{ fontSize: 10.5, fill: MUTED }}
+            tick={{ fontSize: 10.5, fill: HERO_MUTED }}
             axisLine={false}
             tickLine={false}
           />
@@ -119,37 +136,41 @@ export function JoinsArea({ data }) {
                 detail={(v) => (total > 0 ? `${Math.round((v / total) * 100)}% of all joins` : null)}
               />
             }
-            cursor={{ stroke: 'var(--ds-line-strong)', strokeWidth: 1 }}
+            cursor={{ stroke: 'rgba(236, 253, 245, 0.3)', strokeWidth: 1 }}
             isAnimationActive={false}
           />
           <Area
             type="monotone"
             dataKey="count"
-            stroke={ACCENT}
-            strokeWidth={2}
+            className="viz-hero-line"
+            stroke={MINT}
+            strokeWidth={2.5}
             fill="url(#joinsFill)"
             dot={false}
-            activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--ds-surface)', fill: ACCENT }}
-            animationDuration={900}
+            activeDot={{ r: 5.5, strokeWidth: 2, stroke: '#0E2B28', fill: MINT }}
+            animationDuration={1100}
           />
-          {!flat && peak.count > 0 && (
+          {!flat && peak.count > 0 && peak.day !== last?.day && (
             <ReferenceDot
               x={peak.day}
               y={peak.count}
               r={4}
-              fill={ACCENT}
-              stroke="var(--ds-surface)"
+              fill={MINT}
+              stroke="#0E2B28"
               strokeWidth={2}
               isFront
               label={{
                 value: `Peak · ${fmt(peak.count)}`,
                 position: 'top',
-                fill: INK,
+                fill: HERO_INK,
                 fontSize: 11,
                 fontWeight: 600,
                 dy: -2,
               }}
             />
+          )}
+          {last && !flat && (
+            <ReferenceDot x={last.day} y={last.count} isFront shape={<PulseDot />} />
           )}
         </AreaChart>
       </ResponsiveContainer>
@@ -157,8 +178,9 @@ export function JoinsArea({ data }) {
   )
 }
 
-// People by team: one measure, so one hue (the brand accent) — bar length does
-// the comparing. Hover lifts a row, dims the rest, and floats count + share.
+// People by team: one measure, one gradient hue — bar length does the comparing.
+// Bars grow in with a stagger and a shine sweep; hover lifts a row, dims the
+// rest, and floats count + share.
 export function TeamBars({ data }) {
   const rows = useMemo(() => data.map((d) => ({ unit: d.unit, count: Number(d.count) })), [data])
   const [hot, setHot] = useState(null)
@@ -187,7 +209,7 @@ export function TeamBars({ data }) {
             >
               <span className="viz-bar__label">{row.unit}</span>
               <span className="viz-bar__track">
-                <span className="viz-bar__fill" style={{ width: `${(row.count / max) * 100}%`, background: ACCENT }} />
+                <span className="viz-bar__fill" style={{ width: `${(row.count / max) * 100}%` }} />
               </span>
               <span className="viz-bar__value">{fmt(row.count)}</span>
               {hot === i && (
@@ -205,9 +227,8 @@ export function TeamBars({ data }) {
   )
 }
 
-// How people are connected: one whole split into parts — a tall segmented bar
-// (never a donut). Hovering a segment or its legend row highlights both; shares
-// print inside segments wide enough to hold them.
+// How people are connected: an animated ring — arcs sweep in, hovering an arc
+// (or its legend row) expands it and swaps the live readout in the center.
 export function ConnectionsSplit({ data, labels }) {
   const rows = useMemo(
     () => data.map((d) => ({ key: d.type, label: labels[d.type] || d.type, count: Number(d.count) })),
@@ -215,50 +236,78 @@ export function ConnectionsSplit({ data, labels }) {
   )
   const [hot, setHot] = useState(null)
   const total = rows.reduce((s, r) => s + r.count, 0) || 1
-  let offset = 0
-  const parts = rows.map((r) => {
-    const share = (r.count / total) * 100
-    const part = { ...r, share, start: offset }
-    offset += share
-    return part
-  })
-  const summary = parts.map((r) => `${r.label} ${Math.round(r.share)}%`).join(', ')
+  const counted = useCountUp(total)
+  const summary = rows
+    .map((r) => `${r.label} ${fmt(r.count)} (${Math.round((r.count / total) * 100)}%)`)
+    .join(', ')
+  const active = hot !== null ? rows[hot] : null
   return (
     <figure className="viz" role="group" aria-label={`How people are connected: ${summary}`}>
-      <VizHead title="How people are connected" sub={`${rows.length} tie types`} value={total} unit="ties" />
-      <div className={`viz-split ${hot !== null ? 'viz-split--dim' : ''}`} role="img" aria-label={summary} onMouseLeave={() => setHot(null)}>
-        {parts.map((r, i) => (
-          <span
-            key={r.key}
-            className={`viz-split__part ${hot === i ? 'viz-split__part--hot' : ''}`}
-            style={{ width: `${r.share}%`, background: CHART_COLORS[i % CHART_COLORS.length], '--i': i }}
-            tabIndex={0}
-            aria-label={`${r.label}: ${fmt(r.count)}, ${Math.round(r.share)}%`}
-            onMouseEnter={() => setHot(i)}
-            onFocus={() => setHot(i)}
-            onBlur={() => setHot(null)}
-          >
-            {r.share >= 9 && <em>{Math.round(r.share)}%</em>}
-          </span>
-        ))}
-        {hot !== null && (
-          <span
-            className="viz-tip viz-tip--split"
-            style={{ left: `${Math.min(86, Math.max(10, parts[hot].start + parts[hot].share / 2))}%` }}
-            role="status"
-          >
-            <strong>{fmt(parts[hot].count)}</strong>
-            <span>{parts[hot].label}</span>
-            <em>{Math.round(parts[hot].share)}%</em>
-          </span>
-        )}
+      <div className="viz-head">
+        <div className="viz-head__text">
+          <span className="viz-head__title">How people are connected</span>
+          <span className="viz-head__sub">{rows.length} tie types</span>
+        </div>
+      </div>
+      <div className="viz-donut" role="img" aria-label={summary}>
+        <ResponsiveContainer width="100%" height={216}>
+          <PieChart>
+            <Pie
+              data={rows}
+              dataKey="count"
+              nameKey="label"
+              cx="50%"
+              cy="50%"
+              innerRadius="66%"
+              outerRadius="88%"
+              paddingAngle={3}
+              cornerRadius={7}
+              startAngle={90}
+              endAngle={-270}
+              stroke="none"
+              animationDuration={950}
+              onMouseEnter={(_, i) => setHot(i)}
+              onMouseLeave={() => setHot(null)}
+            >
+              {rows.map((r, i) => (
+                <Cell
+                  key={r.key}
+                  fill={CHART_COLORS[i % CHART_COLORS.length]}
+                  className={
+                    hot === i ? 'donut-cell--hot' : hot !== null ? 'donut-cell--dim' : ''
+                  }
+                />
+              ))}
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="viz-donut__center" aria-hidden="true">
+          {active ? (
+            <>
+              <strong>{fmt(active.count)}</strong>
+              <span>{active.label}</span>
+              <em style={{ color: CHART_COLORS[hot % CHART_COLORS.length] }}>
+                {Math.round((active.count / total) * 100)}% of ties
+              </em>
+            </>
+          ) : (
+            <>
+              <strong>{fmt(counted)}</strong>
+              <span>ties in the network</span>
+            </>
+          )}
+        </div>
       </div>
       <ul className="viz-legend" onMouseLeave={() => setHot(null)}>
-        {parts.map((r, i) => (
+        {rows.map((r, i) => (
           <li
             key={r.key}
             className={hot !== null && hot !== i ? 'viz-legend__item--dim' : ''}
+            tabIndex={0}
+            aria-label={`${r.label}: ${fmt(r.count)}, ${Math.round((r.count / total) * 100)}%`}
             onMouseEnter={() => setHot(i)}
+            onFocus={() => setHot(i)}
+            onBlur={() => setHot(null)}
           >
             <i style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
             {r.label}

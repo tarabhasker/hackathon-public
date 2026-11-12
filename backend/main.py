@@ -218,11 +218,16 @@ def whoami(authorization: str | None = Header(default=None)):
 
 @app.get("/api/projects")
 def list_projects(authorization: str | None = Header(default=None)):
-    """Known project names, so first-time setup can link people to real teams."""
+    """Projects real people have worked on, so first-time setup can link people to
+    real teams. Seeded demo people's placeholder projects are left out."""
     _require_user(authorization)
     with engine.connect() as conn:
         rows = conn.execute(
-            text("SELECT DISTINCT project FROM project_memberships ORDER BY project")
+            text(
+                "SELECT DISTINCT m.project FROM project_memberships m "
+                "JOIN people p ON p.id = m.person_id "
+                "WHERE p.is_real ORDER BY m.project"
+            )
         ).scalars().all()
     return rows
 

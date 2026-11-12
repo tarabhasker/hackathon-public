@@ -8,6 +8,7 @@ import Admin from './pages/Admin'
 import AdminEvent from './pages/AdminEvent'
 import { Register, SignIn } from './pages/AuthForm'
 import JoinEvent from './pages/JoinEvent'
+import MyEvent from './pages/MyEvent'
 import Network from './pages/Network'
 import Profile from './pages/Profile'
 import Quiz from './pages/Quiz'
@@ -42,6 +43,7 @@ export default function App() {
                 <Route index element={<Network />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/people/:id" element={<Profile />} />
+                <Route path="/events/:id" element={<MyEvent />} />
                 <Route path="/quiz" element={<Quiz />} />
               </Route>
             </Route>

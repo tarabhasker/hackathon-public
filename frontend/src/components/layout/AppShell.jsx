@@ -24,6 +24,12 @@ function Sidebar() {
           {item.label}
         </NavLink>
       ))}
+      {user.is_admin && (
+        <NavLink to="/admin" className="shell-nav__link">
+          <Icon name="target" />
+          Admin
+        </NavLink>
+      )}
       <a className="shell-nav__link" href={`${API_BASE}/docs`}>
         <Icon name="users" />
         API docs

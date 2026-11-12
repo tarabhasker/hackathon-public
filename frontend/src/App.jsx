@@ -1,8 +1,9 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import AppShell from './components/layout/AppShell'
-import { GuestOnly, RequireAuth, RequireProfile } from './components/layout/guards'
+import { GuestOnly, RequireAdmin, RequireAuth, RequireProfile } from './components/layout/guards'
 import { ToastProvider } from './components/ui'
 import { AuthProvider } from './hooks/useAuth'
+import Admin from './pages/Admin'
 import { Register, SignIn } from './pages/AuthForm'
 import Network from './pages/Network'
 import Quiz from './pages/Quiz'
@@ -21,6 +22,12 @@ export default function App() {
           </Route>
           <Route element={<RequireAuth />}>
             <Route path="/setup" element={<Setup />} />
+            {/* Admin skips RequireProfile: an admin account needs no person profile */}
+            <Route element={<RequireAdmin />}>
+              <Route element={<AppShell />}>
+                <Route path="/admin" element={<Admin />} />
+              </Route>
+            </Route>
             <Route element={<RequireProfile />}>
               <Route element={<AppShell />}>
                 <Route index element={<Network />} />

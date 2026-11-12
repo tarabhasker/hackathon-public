@@ -291,3 +291,23 @@
 .chipset legend { float: none; margin: 0 0 2px; padding: 0; font-size: 13px; font-weight: 500; }
 .chipset__hint { display: block; margin-bottom: 10px; font-size: 12px; color: var(--secondary-muted); }
 .chipset__chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* --- Admin page --------------------------------------------------------------- */
+.admin { padding: 28px 32px 48px; max-width: 1040px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+.admin--loading { display: flex; align-items: center; gap: 10px; color: var(--secondary-muted); padding: 48px; }
+.admin-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.admin-head h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+.admin-head span { font-size: 13px; color: var(--secondary-muted); }
+.admin-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 28px; }
+.admin-stat { padding: 16px 18px; display: flex; flex-direction: column; gap: 2px; }
+.admin-stat__value { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; }
+.admin-stat__label { font-size: 12.5px; color: var(--secondary-muted); }
+.admin-stat__sub { font-size: 11.5px; color: var(--secondary-muted); }
+.admin-tablewrap { margin-top: 10px; padding: 4px 0; overflow-x: auto; }
+.admin-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.admin-table th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--secondary-muted); font-weight: 600; padding: 10px 16px; border-bottom: 1px solid var(--ds-line); }
+.admin-table td { padding: 10px 16px; border-bottom: 1px solid var(--ds-line); vertical-align: middle; }
+.admin-table tr:last-child td { border-bottom: none; }
+.admin-dim { color: var(--secondary-muted); }
+.admin-actions { display: flex; gap: 8px; justify-content: flex-end; white-space: nowrap; }
+@media (max-width: 760px) { .admin { padding: 20px 16px 90px; } }

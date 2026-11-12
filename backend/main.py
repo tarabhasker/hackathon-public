@@ -41,7 +41,43 @@ ALLOWED_ORIGINS = [
     "http://localhost:3001",
 ]
 
-app = FastAPI(title="Hackathon API")
+def ensure_admin() -> None:
+    """Create (or promote) the admin account named by ADMIN_EMAIL/ADMIN_PASSWORD."""
+    email = os.environ.get("ADMIN_EMAIL", "").strip().lower()
+    password = os.environ.get("ADMIN_PASSWORD", "")
+    if not email or not password:
+        return
+    with engine.begin() as conn:
+        existing = conn.execute(
+            text("SELECT id, is_admin FROM users WHERE email = :e"), {"e": email}
+        ).first()
+        if existing is None:
+            conn.execute(
+                text(
+                    "INSERT INTO users (email, password_hash, is_admin) "
+                    "VALUES (:e, :h, true)"
+                ),
+                {"e": email, "h": auth.hash_password(password)},
+            )
+            print(f"Admin account created: {email}", flush=True)
+        elif not existing.is_admin:
+            conn.execute(
+                text("UPDATE users SET is_admin = true WHERE id = :id"),
+                {"id": existing.id},
+            )
+            print(f"Admin flag granted to existing account: {email}", flush=True)
+
+
+from contextlib import asynccontextmanager  # noqa: E402
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    ensure_admin()
+    yield
+
+
+app = FastAPI(title="Hackathon API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -132,7 +168,7 @@ def submit_quiz(entry: QuizEntry):
 def _user_payload(conn, user_id: int) -> dict | None:
     row = conn.execute(
         text(
-            "SELECT u.id, u.email, p.id AS pid, p.name, p.title, p.org_unit "
+            "SELECT u.id, u.email, u.is_admin, p.id AS pid, p.name, p.title, p.org_unit "
             "FROM users u LEFT JOIN people p ON p.id = u.person_id WHERE u.id = :id"
         ),
         {"id": user_id},
@@ -142,7 +178,7 @@ def _user_payload(conn, user_id: int) -> dict | None:
     person = None
     if row.pid is not None:
         person = {"id": row.pid, "name": row.name, "title": row.title, "org_unit": row.org_unit}
-    return {"id": row.id, "email": row.email, "person": person}
+    return {"id": row.id, "email": row.email, "is_admin": row.is_admin, "person": person}
 
 
 def _user_id(authorization: str | None) -> int | None:
@@ -155,6 +191,17 @@ def _require_user(authorization: str | None) -> int:
     user_id = _user_id(authorization)
     if user_id is None:
         raise HTTPException(status_code=401, detail="Sign in to continue")
+    return user_id
+
+
+def _require_admin(authorization: str | None) -> int:
+    user_id = _require_user(authorization)
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT is_admin FROM users WHERE id = :id"), {"id": user_id}
+        ).first()
+    if row is None or not row.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
     return user_id
 
 
@@ -212,6 +259,66 @@ def whoami(authorization: str | None = Header(default=None)):
     if user is None:
         raise HTTPException(status_code=401, detail="Sign in to continue")
     return user
+
+
+# --- Admin ------------------------------------------------------------------------
+
+@app.get("/api/admin/overview")
+def admin_overview(authorization: str | None = Header(default=None)):
+    _require_admin(authorization)
+    with engine.connect() as conn:
+        stats = conn.execute(text(
+            "SELECT "
+            "(SELECT COUNT(*) FROM users) AS users, "
+            "(SELECT COUNT(*) FROM people) AS people, "
+            "(SELECT COUNT(*) FROM people WHERE is_real) AS real_people, "
+            "(SELECT COUNT(*) FROM edges) AS edges, "
+            "(SELECT COUNT(*) FROM facets WHERE embedding IS NOT NULL) AS embedded_facets, "
+            "(SELECT COUNT(*) FROM facets) AS facets, "
+            "(SELECT COUNT(*) FROM quiz_entries) AS quiz_entries"
+        )).mappings().one()
+    return dict(stats)
+
+
+@app.get("/api/admin/users")
+def admin_users(authorization: str | None = Header(default=None)):
+    _require_admin(authorization)
+    with engine.connect() as conn:
+        rows = conn.execute(text(
+            "SELECT u.id, u.email, u.is_admin, u.created_at, "
+            "p.id AS person_id, p.name AS person_name "
+            "FROM users u LEFT JOIN people p ON p.id = u.person_id "
+            "ORDER BY u.created_at DESC"
+        )).mappings().all()
+    return [dict(r) for r in rows]
+
+
+@app.post("/api/admin/users/{user_id}/toggle-admin")
+def admin_toggle(user_id: int, authorization: str | None = Header(default=None)):
+    me = _require_admin(authorization)
+    if user_id == me:
+        raise HTTPException(status_code=400, detail="You can't change your own admin flag")
+    with engine.begin() as conn:
+        row = conn.execute(
+            text("UPDATE users SET is_admin = NOT is_admin WHERE id = :id RETURNING is_admin"),
+            {"id": user_id},
+        ).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"id": user_id, "is_admin": row.is_admin}
+
+
+@app.delete("/api/admin/people/{person_id}", status_code=204)
+def admin_delete_person(person_id: int, authorization: str | None = Header(default=None)):
+    _require_admin(authorization)
+    with engine.begin() as conn:
+        # detach any account pointing at this person, then cascade-delete the person
+        conn.execute(
+            text("UPDATE users SET person_id = NULL WHERE person_id = :id"), {"id": person_id}
+        )
+        result = conn.execute(text("DELETE FROM people WHERE id = :id"), {"id": person_id})
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Person not found")
 
 
 # --- 6 Degrees API ----------------------------------------------------------------

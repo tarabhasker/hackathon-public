@@ -531,12 +531,12 @@ def event_graph(event_id: int, authorization: str | None = Header(default=None))
             sem_degree: dict[int, int] = {}
             for s in sims:
                 sim = float(s.sim)
-                if sim < 0.5:
+                if sim < 0.45:
                     break  # sorted, nothing stronger follows
                 key = (s.a, s.b)
                 if key in pairs:
                     continue  # a real shared history beats a similarity guess
-                if sem_degree.get(s.a, 0) >= 3 or sem_degree.get(s.b, 0) >= 3:
+                if sem_degree.get(s.a, 0) >= 4 or sem_degree.get(s.b, 0) >= 4:
                     continue  # cap so the room doesn't become a hairball
                 sem_degree[s.a] = sem_degree.get(s.a, 0) + 1
                 sem_degree[s.b] = sem_degree.get(s.b, 0) + 1

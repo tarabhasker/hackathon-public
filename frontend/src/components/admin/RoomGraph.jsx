@@ -13,32 +13,49 @@ const AVATAR_FILLS = 6
 
 const pct = (x, total) => `${(x / total) * 100}%`
 
-// Deterministic force layout: seeded ring start, ~220 relaxation steps.
+// Deterministic pseudo-random, so the same room always draws the same
+function rand(seed) {
+  let t = seed + 0x6d2b79f5
+  t = Math.imul(t ^ (t >>> 15), t | 1)
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+}
+
+// Force layout from a clustered-cloud start (not a ring): teams seed near a
+// shared spot with jitter, springs pull tied people together, repulsion and
+// centre gravity keep it an organic blob.
 function forceLayout(nodes, edges) {
   const n = nodes.length
   if (n === 0) return {}
   const idx = Object.fromEntries(nodes.map((node, i) => [node.id, i]))
   const cx = W / 2
   const cy = H / 2
-  // start on a ring, ordered by team so clusters begin near each other
-  const sorted = [...nodes].sort((a, b) =>
-    (a.org_unit || '~').localeCompare(b.org_unit || '~') || a.name.localeCompare(b.name),
-  )
+
+  // one anchor angle per team; members start in a jittered cloud around it
+  const teams = [...new Set(nodes.map((node) => node.org_unit || '~'))].sort()
+  const anchor = {}
+  teams.forEach((team, i) => {
+    const angle = (i / teams.length) * 2 * Math.PI + 0.7
+    anchor[team] = {
+      x: cx + 150 * Math.cos(angle),
+      y: cy + 120 * Math.sin(angle),
+    }
+  })
   const xs = new Array(n)
   const ys = new Array(n)
-  sorted.forEach((node, i) => {
-    const angle = (i / n) * 2 * Math.PI
-    xs[idx[node.id]] = cx + (W / 2 - PAD) * 0.85 * Math.cos(angle)
-    ys[idx[node.id]] = cy + (H / 2 - PAD) * 0.85 * Math.sin(angle)
+  nodes.forEach((node, i) => {
+    const a = anchor[node.org_unit || '~']
+    xs[i] = a.x + (rand(i * 2 + 1) - 0.5) * 320
+    ys[i] = a.y + (rand(i * 2 + 2) - 0.5) * 260
   })
 
   const springs = edges
     .filter((e) => idx[e.a] !== undefined && idx[e.b] !== undefined)
-    .map((e) => [idx[e.a], idx[e.b], e.semantic ? 0.5 : Math.min(1, e.weight + 0.4)])
+    .map((e) => [idx[e.a], idx[e.b], e.semantic ? 0.6 : Math.min(1, e.weight + 0.4)])
 
-  const repulsion = 2600 * Math.max(1, 40 / n)
-  for (let step = 0; step < 220; step++) {
-    const t = 1 - step / 220 // cooling
+  const repulsion = 2000 * Math.max(1, 34 / n)
+  for (let step = 0; step < 260; step++) {
+    const t = 1 - step / 260 // cooling
     const fx = new Array(n).fill(0)
     const fy = new Array(n).fill(0)
     for (let i = 0; i < n; i++) {
@@ -55,15 +72,15 @@ function forceLayout(nodes, edges) {
         fx[j] -= dx * f
         fy[j] -= dy * f
       }
-      // gentle gravity to the centre
-      fx[i] += (cx - xs[i]) * 0.012
-      fy[i] += (cy - ys[i]) * 0.012
+      // stronger gravity than repulsion at the rim, so the shape stays a blob
+      fx[i] += (cx - xs[i]) * 0.028
+      fy[i] += (cy - ys[i]) * 0.028
     }
     for (const [i, j, k] of springs) {
       const dx = xs[j] - xs[i]
       const dy = ys[j] - ys[i]
       const d = Math.hypot(dx, dy) || 1
-      const pull = ((d - 110) / d) * 0.02 * k
+      const pull = ((d - 95) / d) * 0.05 * k
       fx[i] += dx * pull
       fy[i] += dy * pull
       fx[j] -= dx * pull
@@ -104,9 +121,6 @@ export default function RoomGraph({ nodes, edges }) {
         role="img"
         aria-label={`${nodes.length} people in the room, ${edges.length} connections between them`}
       >
-        <div aria-hidden="true" className="nw-ring nw-ring--inner" />
-        <div aria-hidden="true" className="nw-ring nw-ring--outer" />
-
         {edges.map((e) => {
           const from = positions[e.a]
           const to = positions[e.b]

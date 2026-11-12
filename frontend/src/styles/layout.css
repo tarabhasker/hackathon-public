@@ -854,3 +854,17 @@
 .rg-key--strong { border-top-color: var(--ds-line-strong); }
 .rg-key--sem { border-top-style: dashed; border-top-color: color-mix(in srgb, var(--primary) 70%, transparent); }
 .rg-key--ghost { width: 10px; height: 10px; border: 1.5px dashed var(--ds-line-strong); border-radius: 50%; }
+
+/* room graph: ties must be readable at a glance (override the faint nw defaults) */
+.rg .nw-edge--strong {
+  height: 2px;
+  margin-top: -1px;
+  background: color-mix(in srgb, var(--secondary) 34%, transparent);
+  border-radius: 1px;
+}
+.rg .nw-edge--weak {
+  border-top: 1.5px dashed color-mix(in srgb, var(--secondary) 30%, transparent);
+}
+.rg .rg-edge--sem {
+  border-top: 2px dashed color-mix(in srgb, var(--primary) 72%, transparent);
+}

@@ -59,6 +59,12 @@ const PATHS = {
     </>
   ),
   back: <path d="M15 6l-6 6 6 6" />,
+  linkedin: (
+    <>
+      <rect x="3.5" y="3.5" width="17" height="17" rx="3" />
+      <path d="M8 10.5V16M8 7.6v.1M11.5 16v-5.5M11.5 13c0-1.6 1-2.6 2.3-2.6 1.4 0 2.2 1 2.2 2.6v3" />
+    </>
+  ),
   folder: <path d="M3.5 6.5h6l2 2.5h9v10.5h-17z" />,
   pencil: <path d="M4 20l1-4.5L16.5 4 20 7.5 8.5 19zM14 6.5l3.5 3.5" />,
   camera: (

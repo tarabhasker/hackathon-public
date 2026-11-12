@@ -18,7 +18,6 @@ export default function MobileFind({
   rows,
   network,
   ctaLabel,
-  ctaDone,
   onCta,
   onPick,
   onConnect,
@@ -80,7 +79,8 @@ export default function MobileFind({
               <span className="mf-match__role">No warm path yet — this would be cold outreach.</span>
             )}
             <Button variant="primary" size="lg" block onClick={onCta}>
-              {ctaDone ? 'Draft copied — paste to send' : ctaLabel}
+              <Icon name="linkedin" size={16} />
+              {ctaLabel}
             </Button>
           </Card>
         ) : (

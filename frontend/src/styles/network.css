@@ -98,7 +98,6 @@
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 18%, transparent);
   animation: nw-travel 1.8s linear infinite;
 }
-
 /* Nodes */
 .nw-node {
   position: absolute;
@@ -159,6 +158,37 @@
   white-space: nowrap;
 }
 .nw-node--far .nw-node__label { font-size: 11px; }
+
+/* Hover tooltip: name, role, current company */
+.nw-node:hover, .nw-node:focus-visible { z-index: 10; }
+.nw-node__tip {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translate(-50%, 4px);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 140px;
+  max-width: 220px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--secondary);
+  color: var(--secondary-ink);
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
+  white-space: normal;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.18);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s, transform 0.15s;
+}
+.nw-node__tip--below { bottom: auto; top: calc(100% + 8px); }
+.nw-node__tip-name { font-weight: 700; font-size: 13px; }
+.nw-node__tip-row { opacity: 0.85; }
+.nw-node:hover .nw-node__tip,
+.nw-node:focus-visible .nw-node__tip { opacity: 1; transform: translate(-50%, 0); }
 .nw-node--you .nw-node__label,
 .nw-node--target .nw-node__label,
 .nw-node--path .nw-node__label { color: var(--secondary); border-color: var(--secondary); font-weight: 600; }

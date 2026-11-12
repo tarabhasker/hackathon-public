@@ -8,16 +8,21 @@ const POINTS = [
   { icon: 'users', text: 'Ask a mutual colleague for a warm intro' },
 ]
 
-// Split-screen frame for sign-in, register and first-time setup:
-// an animated hero panel on the left, the form card on the right.
+// Frame for sign-in, register and first-time setup: an animated background
+// across the whole page that fades out to the right, the pitch in the left
+// half and the form card centred in the right half.
 export default function AuthLayout({ title, subtitle, wide = false, footer, children }) {
   return (
-    <div className="auth">
+    <div className="auth" data-backdrop-host>
+      <div className="auth-bg" aria-hidden="true">
+        <SocialBackdrop className="auth-bg__canvas" />
+      </div>
+
       <aside className="auth-hero">
-        <SocialBackdrop className="auth-hero__canvas" />
-        <div className="auth-hero__shade" aria-hidden="true" />
-        <Brand inverse />
-        <div className="auth-hero__copy">
+        <div className="auth-hero__brand" data-backdrop-avoid>
+          <Brand inverse />
+        </div>
+        <div className="auth-hero__copy" data-backdrop-avoid>
           <p className="auth-hero__headline">
             Someone you know <em>knows the answer.</em>
           </p>
@@ -37,15 +42,15 @@ export default function AuthLayout({ title, subtitle, wide = false, footer, chil
       </aside>
 
       <main className="auth-main">
-        <div className={`auth__inner ${wide ? 'auth__inner--wide' : ''}`}>
+        <div className={`auth__inner ${wide ? 'auth__inner--wide' : ''}`} data-backdrop-avoid>
           <Card className="auth__card">
             <div className="auth__head">
               <h1>{title}</h1>
               {subtitle && <p>{subtitle}</p>}
             </div>
             {children}
+            {footer && <p className="auth__footer">{footer}</p>}
           </Card>
-          {footer && <p className="auth__footer">{footer}</p>}
         </div>
       </main>
     </div>

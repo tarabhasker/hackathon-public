@@ -37,13 +37,14 @@ Migration note: `0003` begins with `CREATE EXTENSION IF NOT EXISTS vector;` then
 
 ## Pre-hackathon checklist (do before the clock starts)
 
-- [ ] Confirm which **LLM + embedding provider** the hackathon allows/provides; put keys in `backend/.env`
-- [ ] Swap compose db image to `pgvector/pgvector:pg16`; write + test migration 0003
-- [ ] Add Python deps: `networkx`, `numpy`, `pypdf`, LLM SDK → `requirements.txt` (triggers image rebuild)
-- [ ] Write the **synthetic-org seed script** (~200 people, deterministic seed, realistic titles/projects/overlaps) — this is the demo's foundation, don't leave it to day 1
-- [ ] Teammates request their LinkedIn **Connections.csv** export now (takes 24–48 h)
+- [x] LLM/embedding provider settled: **Gemini via personal GCP** — `google-genai` SDK, `text-embedding-004` (768-dim), free AI Studio key from https://aistudio.google.com/apikey → `GOOGLE_API_KEY` in `backend/.env`
+- [x] Compose db image swapped to `pgvector/pgvector:pg16`; migration 0003 written and applied
+- [x] Python deps added: `networkx`, `numpy`, `pypdf`, `google-genai`, `pgvector`
+- [x] Synthetic-org seed script done: `./seed.sh` loads 200 people, 600 facets, ~6,000 weighted edges (deterministic, graph verified connected; `--with-embeddings` embeds via Gemini). Real profiles (team CVs) survive re-seeding via the `is_real` flag
+- [ ] Each teammate: get your own `GOOGLE_API_KEY` into `backend/.env` (gitignored)
+- [ ] OPTIONAL (only if we want real LinkedIn edges): each teammate requests their **Connections.csv** at LinkedIn → Settings → *Get a copy of your data* — the email takes 24–48 h, so it can't be done at the event
 - [ ] Collect 2–3 real **test CVs as PDF** and run them through the parser prompt once
-- [ ] Everyone through SETUP.md on their own laptop
+- [ ] Everyone through SETUP.md on their own laptop, then run `./seed.sh` once
 
 ## Workstream A — Intake (CV → confirmed profile)
 
@@ -119,8 +120,8 @@ Rule: a working path with an explanation beats five half-built features. One per
 - [ ] Record a backup screen capture of one good run
 - [ ] Demo from `main`, frozen 2 h before; last-minute fixes on a branch, merged only if rehearsal passes
 
-## Open decisions (settle before day 1)
+## Decisions (settled 2026-11-12)
 
-1. **Which LLM/embedding provider** does the hackathon allow? (determines SDK + vector dimension — blocks migration 0003)
-2. **Primary user for the pitch**: new joiner vs project lead — changes the demo query, nothing else
-3. Does the synthetic org include the **team's real profiles**? (recommended: yes, demo hits harder)
+1. **Provider**: Gemini via personal GCP (free tier) — Gemini Flash for parsing/drafting/explaining, `text-embedding-004` for vectors (768-dim, baked into the schema).
+2. **Real profiles in the demo**: yes — team members add themselves via the CV upload flow; `is_real=true` rows survive re-seeding.
+3. Still open: **primary user for the pitch** (new joiner vs project lead) — changes only the demo query, decide during rehearsal.

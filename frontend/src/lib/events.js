@@ -33,3 +33,34 @@ export function clearPendingEvent() {
 export function joinUrl(base, code) {
   return `${base.replace(/\/+$/, '')}/join/${code}`
 }
+
+// The room someone just joined via QR/code, so sign-in and first-time setup can
+// land them in it instead of the main page. Cleared when the room page opens.
+const ROOM_KEY = 'bff.joinedRoom'
+const ROOM_MAX_AGE_MS = 60 * 60 * 1000
+
+export function setJoinedRoom(id) {
+  try {
+    localStorage.setItem(ROOM_KEY, JSON.stringify({ id, at: Date.now() }))
+  } catch {
+    // storage unavailable: they'll land on the network page instead
+  }
+}
+
+export function getJoinedRoom() {
+  try {
+    const value = JSON.parse(localStorage.getItem(ROOM_KEY))
+    if (!value || Date.now() - value.at > ROOM_MAX_AGE_MS) return null
+    return value.id
+  } catch {
+    return null
+  }
+}
+
+export function clearJoinedRoom() {
+  try {
+    localStorage.removeItem(ROOM_KEY)
+  } catch {
+    // nothing to clear
+  }
+}

@@ -4,6 +4,7 @@ import { api } from '../api'
 import AuthLayout from '../components/layout/AuthLayout'
 import { Button, Chip, Icon, Spinner, TextField, useToast } from '../components/ui'
 import { useAuth } from '../hooks/useAuth'
+import { getJoinedRoom } from '../lib/events'
 
 const STEPS = ['About you', 'Your work', 'Give & get']
 const splitList = (s) => s.split(',').map((x) => x.trim()).filter(Boolean)
@@ -30,7 +31,11 @@ export default function Setup() {
       .catch(() => {}) // pickers are a convenience; free text still works
   }, [])
 
-  if (user.person) return <Navigate to="/" replace />
+  // profile done: straight into the room they scanned into, if there is one
+  if (user.person) {
+    const room = getJoinedRoom()
+    return <Navigate to={room != null ? `/events/${room}` : '/'} replace />
+  }
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }))
   const toggleProject = (name) =>

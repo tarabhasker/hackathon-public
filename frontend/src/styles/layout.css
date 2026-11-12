@@ -1011,6 +1011,8 @@
 .rg-legend li { display: inline-flex; align-items: center; gap: 6px; }
 .rg-key { width: 14px; height: 0; border-top: 2px solid; border-radius: 1px; }
 .rg-key--strong { border-top-color: var(--ds-line-strong); }
+.rg-key--bold { border-top: 3.5px solid color-mix(in srgb, var(--secondary) 64%, transparent); }
+.rg-key--weakdot { border-top-style: dotted; border-top-color: color-mix(in srgb, var(--secondary) 46%, transparent); }
 .rg-key--sem { border-top-style: dashed; border-top-color: color-mix(in srgb, var(--primary) 70%, transparent); }
 .rg-key--ghost { width: 10px; height: 10px; border: 1.5px dashed var(--ds-line-strong); border-radius: 50%; }
 
@@ -1026,6 +1028,19 @@
   height: 1.5px;
   background: color-mix(in srgb, var(--secondary) 26%, transparent);
 }
+/* a strong tie reads bold at a glance */
+.rg .rg-edge--bold {
+  height: 3.5px;
+  margin-top: -1.75px;
+  background: color-mix(in srgb, var(--secondary) 64%, transparent);
+}
+/* a weak link is dotted */
+.rg .rg-edge--weak {
+  height: 0;
+  background: none;
+  border-top: 2px dotted color-mix(in srgb, var(--secondary) 42%, transparent);
+}
+.rg .rg-edge--weak.rg--lit { background: none; border-top: 2px dotted var(--primary); height: 0; }
 .rg .rg-edge--sem {
   border-top: 2px dashed color-mix(in srgb, var(--primary) 72%, transparent);
 }
@@ -1219,3 +1234,409 @@ a.mev-tie:hover, a.mev-person__who:hover { background: var(--ds-surface-sunken, 
 /* you, in the room graph */
 .rg-node--me .nw-node__av { box-shadow: 0 0 0 2px var(--ds-surface), 0 0 0 4px var(--primary); }
 .rg-node--me .nw-node__label { font-weight: 700; color: var(--primary); }
+
+/* strength pill at the midpoint of a lit tie */
+.rg-edgelabel {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  z-index: 3;
+  padding: 2px 8px;
+  border: 1px solid var(--primary);
+  border-radius: 999px;
+  background: var(--ds-surface);
+  color: var(--secondary);
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.mev-head__actions { display: flex; align-items: center; gap: 12px; }
+.mev-teamchips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+
+/* "people you should meet" rows */
+.mev-meet__sub { font-size: 12.5px; color: var(--secondary-muted); margin-top: -4px; }
+.mev-meet__match {
+  flex: 0 0 auto;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--primary);
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+  padding-left: 6px;
+}
+.mev-tie .mev-meet__match { margin-left: auto; }
+
+/* attendee filter */
+.mev-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border: 1px solid var(--ds-line);
+  border-radius: 10px;
+  background: var(--ds-bg);
+  color: var(--secondary-muted);
+}
+.mev-filter input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--secondary);
+  outline: none;
+}
+
+/* just-joined marker */
+.mev-new {
+  display: inline-block;
+  margin-left: 7px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  vertical-align: 2px;
+}
+
+/* --- Room orbit: you at the centre, the room arranged around you ------------------- */
+.orb { position: relative; }
+.orb__stage {
+  position: relative;
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto;
+  aspect-ratio: 760 / 560;
+  border: 1px solid var(--ds-line);
+  border-radius: var(--ds-radius-lg, 16px);
+  overflow: hidden;
+  background:
+    radial-gradient(58% 70% at 50% 50%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 72%),
+    radial-gradient(120% 120% at 50% 0%, color-mix(in srgb, var(--secondary-soft) 55%, transparent), transparent 60%),
+    var(--ds-bg);
+}
+
+.orb__ring {
+  position: absolute;
+  border: 1px solid color-mix(in srgb, var(--secondary) 13%, transparent);
+  border-radius: 50%;
+  pointer-events: none;
+}
+/* hover explanation: floats in a layer over the stage, never clipped by it */
+.orb__tip {
+  position: absolute;
+  z-index: 40;
+  transform: translate(-50%, -100%);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: max-content;
+  min-width: 190px;
+  max-width: 272px;
+  padding: 11px 14px 12px;
+  border-radius: 12px;
+  background: var(--secondary);
+  color: var(--secondary-ink);
+  font-size: 12.5px;
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+  box-shadow: 0 10px 26px rgb(0 0 0 / 0.22);
+  pointer-events: none;
+  animation: orb-tip 0.15s ease both;
+}
+.orb__tip--below { transform: translate(-50%, 0); }
+@keyframes orb-tip { from { opacity: 0; } to { opacity: 1; } }
+.orb__tip b { font-size: 14px; font-weight: 700; }
+.orb__tip > span { opacity: 0.78; }
+.orb__tip-tie {
+  margin-top: 5px;
+  padding-top: 7px;
+  border-top: 1px solid rgb(255 255 255 / 0.16);
+  color: color-mix(in srgb, var(--primary) 32%, #fff);
+  font-weight: 600;
+  opacity: 1 !important;
+}
+.orb__tip-hint { font-size: 11px; font-style: italic; opacity: 0.6 !important; }
+
+.orb__wrap { position: relative; }
+
+/* live ambience: a slow aurora drifting round the room, breathing at the centre */
+.orb__glow {
+  position: absolute;
+  inset: -28%;
+  background: conic-gradient(
+    from 20deg at 50% 50%,
+    transparent 0deg,
+    color-mix(in srgb, var(--primary) 16%, transparent) 70deg,
+    transparent 150deg,
+    color-mix(in srgb, var(--ds-ok) 12%, transparent) 225deg,
+    transparent 320deg
+  );
+  filter: blur(46px);
+  animation: orb-glow-spin 26s linear infinite;
+  pointer-events: none;
+}
+@keyframes orb-glow-spin { to { transform: rotate(360deg); } }
+.orb__breath {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(40% 44% at 50% 50%, color-mix(in srgb, var(--primary) 13%, transparent), transparent 72%);
+  animation: orb-breath 7s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+@keyframes orb-breath {
+  from { opacity: 0.35; transform: scale(0.96); }
+  to { opacity: 0.85; transform: scale(1.07); }
+}
+/* the newcomer ping still needs this */
+@keyframes orb-sonar {
+  0% { transform: scale(0.6); opacity: 0.55; }
+  100% { transform: scale(6.2); opacity: 0; }
+}
+
+/* the field turns as one; every name counter-turns so it stays upright */
+.orb__field { position: absolute; inset: 0; animation: orb-spin 240s linear infinite; }
+.orb__counter { display: block; animation: orb-counter 240s linear infinite; }
+@keyframes orb-spin { to { transform: rotate(360deg); } }
+@keyframes orb-counter { to { transform: rotate(-360deg); } }
+.orb__stage:hover .orb__field,
+.orb__stage:hover .orb__counter,
+.orb__stage:focus-within .orb__field,
+.orb__stage:focus-within .orb__counter { animation-play-state: paused; }
+
+.orb__beam {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--primary) 15%, transparent), var(--primary));
+  pointer-events: none;
+}
+
+.orb__person {
+  position: absolute;
+  z-index: 3;
+  transform: translate(-50%, -50%);
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  transition: left 0.9s cubic-bezier(0.3, 0.8, 0.3, 1), top 0.9s cubic-bezier(0.3, 0.8, 0.3, 1), opacity 0.2s ease;
+  animation: orb-pop 0.5s ease backwards;
+}
+.orb__person--lit { z-index: 8; }
+.orb__person--dim { opacity: 0.22; }
+.orb__person:focus-visible { outline: none; }
+.orb__person:focus-visible .orb__av { box-shadow: 0 0 0 2px var(--ds-surface), 0 0 0 4px var(--primary); }
+@keyframes orb-pop {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.3); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+.orb__bob {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  animation: orb-bob var(--drift, 5s) ease-in-out infinite alternate;
+}
+@keyframes orb-bob { from { transform: translateY(-2.5px); } to { transform: translateY(2.5px); } }
+
+.orb__av {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--size, 44px);
+  height: var(--size, 44px);
+  border-radius: 50%;
+  overflow: hidden;
+  background: radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--primary) 26%, var(--ds-surface)), color-mix(in srgb, var(--primary) 9%, var(--ds-surface)));
+  border: 1px solid color-mix(in srgb, var(--secondary) 16%, transparent);
+  box-shadow: 0 5px 14px rgb(0 0 0 / 0.1);
+  color: var(--secondary);
+  font-size: 12px;
+  font-weight: 700;
+  transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+.orb__av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.orb__person--lit .orb__av { transform: scale(1.14); box-shadow: 0 0 0 2px var(--ds-surface), 0 0 0 4px var(--primary), 0 8px 22px rgb(0 0 0 / 0.16); }
+.orb__person--ghost .orb__av { background: var(--ds-surface); border-style: dashed; color: var(--secondary-muted); }
+
+.orb__name {
+  padding: 1px 7px;
+  border: 1px solid var(--ds-line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ds-surface) 88%, transparent);
+  color: var(--secondary);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  max-width: 76px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.orb__name--you { border-color: var(--primary); color: var(--primary); font-weight: 700; }
+
+.orb__chip {
+  position: absolute;
+  top: -10px;
+  right: -16px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 3px 8px rgb(0 0 0 / 0.18);
+}
+
+.orb__pulse {
+  position: absolute;
+  top: -1px;
+  right: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ds-ok);
+  box-shadow: 0 0 0 2px var(--ds-surface);
+}
+.orb__pulse::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 2px solid var(--ds-ok);
+  animation: orb-sonar 1.8s ease-out infinite;
+}
+
+.orb__you {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 6;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  pointer-events: none;
+}
+.orb__av--you {
+  width: 76px;
+  height: 76px;
+  font-size: 18px;
+  box-shadow: 0 0 0 3px var(--ds-surface), 0 0 0 5px var(--primary), 0 10px 26px rgb(0 0 0 / 0.16);
+}
+
+/* action card docked over the bottom of the stage */
+.orb__dock {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  z-index: 20;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(560px, calc(100% - 28px));
+  box-sizing: border-box;
+  padding: 12px 38px 12px 14px;
+  border: 1px solid var(--ds-line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--ds-surface) 90%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 14px 34px rgb(0 0 0 / 0.16);
+  animation: orb-dock 0.25s ease both;
+}
+@keyframes orb-dock {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+.orb__av--dock { width: 46px; height: 46px; flex: 0 0 auto; }
+.orb__dock-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
+.orb__dock-text b { font-size: 14.5px; }
+.orb__dock-text small { font-size: 12px; color: var(--secondary-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.orb__dock-tie { color: var(--primary) !important; font-weight: 600; }
+.orb__dock-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.orb__dock-close {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  border: 0;
+  background: none;
+  color: var(--secondary-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.orb__dock-close:hover { color: var(--secondary); }
+
+.orb__hint { margin: 10px 0 0; text-align: center; font-size: 12px; font-style: italic; color: var(--secondary-muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  .orb__field, .orb__counter, .orb__bob, .orb__glow, .orb__breath, .orb__pulse::after { animation: none; }
+  .orb__person { transition: opacity 0.2s ease; }
+}
+
+/* --- Join code cells: scan the QR, or just read this off the screen ----------------- */
+.ev-code { display: flex; flex-direction: column; align-items: center; gap: 7px; margin: 12px 0 2px; }
+.ev-code__label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--secondary-muted);
+}
+.ev-codecells {
+  display: inline-flex;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: default;
+}
+button.ev-codecells { cursor: pointer; }
+.ev-codecells b {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 38px;
+  border: 1px solid var(--ds-line);
+  border-radius: 8px;
+  background: var(--ds-surface);
+  font: 700 17px var(--ds-mono, monospace);
+  text-transform: uppercase;
+  color: var(--secondary);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+button.ev-codecells:hover b { border-color: var(--primary); }
+button.ev-codecells:active b { transform: translateY(1px); }
+button.ev-codecells:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: 10px; }
+
+/* the projected version: readable from the back of the room */
+.present__or { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 6px 0 2px; }
+.present__orlabel { font-size: clamp(13px, 1.6vw, 17px); color: var(--secondary-muted); }
+.ev-codecells--big { gap: 10px; }
+.ev-codecells--big b {
+  width: clamp(44px, 5.5vw, 64px);
+  height: clamp(56px, 7vw, 80px);
+  border-radius: 12px;
+  border-width: 1.5px;
+  font-size: clamp(26px, 3.6vw, 40px);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.08);
+}

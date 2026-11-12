@@ -46,7 +46,9 @@ export default function JoinEvent() {
     api(`/api/events/${event.code}/join`, { method: 'POST' })
       .then((res) => {
         toast.success(res.already_joined ? `You're already in ${res.event}.` : `You joined ${res.event}.`)
-        navigate(user.is_admin && !user.person ? '/admin' : '/', { replace: true })
+        // straight into the room they just scanned into
+        const room = res.id != null ? `/events/${res.id}` : '/'
+        navigate(user.is_admin && !user.person ? '/admin' : room, { replace: true })
       })
       .catch((err) => {
         setPhase(err.status === 403 ? 'closed' : 'error')

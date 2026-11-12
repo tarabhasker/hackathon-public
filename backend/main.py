@@ -500,7 +500,8 @@ def get_event(event_id: int, authorization: str | None = Header(default=None)):
 def _room_graph(conn, event_id: int) -> dict:
     """Everyone in the room and the connections between them."""
     rows = conn.execute(text(
-        "SELECT u.id AS user_id, u.email, p.id AS person_id, p.name, p.title, p.org_unit "
+        "SELECT u.id AS user_id, u.email, m.joined_at, "
+        "p.id AS person_id, p.name, p.title, p.org_unit, p.avatar_key "
         "FROM event_members m JOIN users u ON u.id = m.user_id "
         "LEFT JOIN people p ON p.id = u.person_id "
         "WHERE m.event_id = :id ORDER BY m.joined_at"
@@ -514,12 +515,14 @@ def _room_graph(conn, event_id: int) -> dict:
             nodes.append({
                 "id": r.person_id, "name": r.name, "title": r.title,
                 "org_unit": r.org_unit, "has_profile": True,
+                "avatar_url": _avatar_url(r.avatar_key), "joined_at": r.joined_at,
             })
         else:
             pretty = r.email.split("@")[0].replace(".", " ").title()
             nodes.append({
                 "id": -r.user_id, "name": pretty, "title": None,
                 "org_unit": None, "has_profile": False,
+                "avatar_url": None, "joined_at": r.joined_at,
             })
 
     # strongest stored tie per pair among the attendees
@@ -660,7 +663,7 @@ def join_event(code: str, authorization: str | None = Header(default=None)):
             {"e": event.id, "u": user_id},
         ).first()
         if already:
-            return {"event": event.name, "already_joined": True}
+            return {"event": event.name, "id": event.id, "already_joined": True}
         if not event.is_open:
             raise HTTPException(status_code=403, detail=f"{event.name} is no longer accepting people")
         if event.allowed_domains:
@@ -678,7 +681,7 @@ def join_event(code: str, authorization: str | None = Header(default=None)):
             text("INSERT INTO event_members (event_id, user_id) VALUES (:e, :u)"),
             {"e": event.id, "u": user_id},
         )
-    return {"event": event.name, "already_joined": False}
+    return {"event": event.name, "id": event.id, "already_joined": False}
 
 
 # --- My events (member view) --------------------------------------------------------
@@ -707,7 +710,7 @@ def my_event(event_id: int, authorization: str | None = Header(default=None)):
     user_id = _require_user(authorization)
     with engine.connect() as conn:
         row = conn.execute(text(
-            "SELECT e.id, e.name, e.description, e.is_open, e.created_at, m.joined_at, "
+            "SELECT e.id, e.code, e.name, e.description, e.is_open, e.created_at, m.joined_at, "
             "u.person_id AS me "
             "FROM event_members m "
             "JOIN events e ON e.id = m.event_id "
@@ -720,6 +723,7 @@ def my_event(event_id: int, authorization: str | None = Header(default=None)):
         graph = _room_graph(conn, event_id)
     return {
         "id": row.id,
+        "code": row.code if row.is_open else None,  # invite link only while joinable
         "name": row.name,
         "description": row.description,
         "is_open": row.is_open,

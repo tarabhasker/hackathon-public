@@ -500,7 +500,7 @@ def event_graph(event_id: int, authorization: str | None = Header(default=None))
                     "org_unit": None, "has_profile": False,
                 })
 
-        # strongest tie per pair among the attendees
+        # strongest stored tie per pair among the attendees
         pairs: dict[tuple[int, int], dict] = {}
         if person_ids:
             for e in conn.execute(text(
@@ -512,8 +512,39 @@ def event_graph(event_id: int, authorization: str | None = Header(default=None))
                 if best is None or e.weight > best["weight"]:
                     pairs[key] = {
                         "a": key[0], "b": key[1], "weight": round(e.weight, 3),
-                        "type": e.type, "evidence": e.evidence,
+                        "type": e.type, "evidence": e.evidence, "semantic": False,
                     }
+
+        # plus "you should know each other" ties from embedding similarity:
+        # expertise vectors compared pairwise, keeping each person's best few
+        if len(person_ids) > 1:
+            sims = conn.execute(text(
+                "SELECT f1.person_id AS a, f2.person_id AS b, "
+                "1 - (f1.embedding <=> f2.embedding) AS sim "
+                "FROM facets f1 JOIN facets f2 "
+                "ON f1.person_id < f2.person_id "
+                "AND f1.kind = 'expertise' AND f2.kind = 'expertise' "
+                "WHERE f1.embedding IS NOT NULL AND f2.embedding IS NOT NULL "
+                "AND f1.person_id = ANY(:ids) AND f2.person_id = ANY(:ids) "
+                "ORDER BY sim DESC"
+            ), {"ids": person_ids}).all()
+            sem_degree: dict[int, int] = {}
+            for s in sims:
+                sim = float(s.sim)
+                if sim < 0.5:
+                    break  # sorted, nothing stronger follows
+                key = (s.a, s.b)
+                if key in pairs:
+                    continue  # a real shared history beats a similarity guess
+                if sem_degree.get(s.a, 0) >= 3 or sem_degree.get(s.b, 0) >= 3:
+                    continue  # cap so the room doesn't become a hairball
+                sem_degree[s.a] = sem_degree.get(s.a, 0) + 1
+                sem_degree[s.b] = sem_degree.get(s.b, 0) + 1
+                pairs[key] = {
+                    "a": s.a, "b": s.b, "weight": round(sim, 3),
+                    "type": "semantic", "evidence": "similar expertise — should meet",
+                    "semantic": True,
+                }
 
     return {"nodes": nodes, "edges": list(pairs.values())}
 

@@ -9,6 +9,7 @@ import AdminEvent from './pages/AdminEvent'
 import { Register, SignIn } from './pages/AuthForm'
 import JoinEvent from './pages/JoinEvent'
 import Network from './pages/Network'
+import Profile from './pages/Profile'
 import Quiz from './pages/Quiz'
 import Rooms from './pages/Rooms'
 import Setup from './pages/Setup'
@@ -39,6 +40,8 @@ export default function App() {
             <Route element={<RequireProfile />}>
               <Route element={<AppShell />}>
                 <Route index element={<Network />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/people/:id" element={<Profile />} />
                 <Route path="/quiz" element={<Quiz />} />
               </Route>
             </Route>

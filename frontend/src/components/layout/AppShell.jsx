@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { API_BASE } from '../../api'
+import { API_BASE, assetUrl } from '../../api'
 import { useAuth } from '../../hooks/useAuth'
 import { Avatar, Icon, Logo } from '../ui'
 
@@ -8,6 +8,7 @@ import { Avatar, Icon, Logo } from '../ui'
 // Admins see only their hosting tools; members see the network app.
 const MEMBER_NAV = [
   { to: '/', label: 'Network', mobileLabel: 'Find', icon: 'network', mobileIcon: 'search', end: true },
+  { to: '/profile', label: 'Profile', icon: 'user' },
   { to: '/quiz', label: 'Quiz', icon: 'spark' },
 ]
 const ADMIN_NAV = [
@@ -19,6 +20,12 @@ const SIDEBAR_KEY = 'bff.sidebar'
 
 function Brand({ inverse = false }) {
   return <Logo inverse={inverse} size={inverse ? 40 : 30} className="brand" />
+}
+
+// The signed-in identity block: a link to the member's profile, a plain box for admins.
+function Me({ isAdmin, children, ...props }) {
+  if (isAdmin) return <div {...props}>{children}</div>
+  return <NavLink to="/profile" {...props}>{children}</NavLink>
 }
 
 // Collapsed state survives reloads; Ctrl/Cmd+B toggles it (unless you're typing in a field).
@@ -89,13 +96,19 @@ function Sidebar({ collapsed, onToggle }) {
         </a>
       )}
       <div className="shell-nav__spacer" />
-      <div className="shell-nav__me" {...tip(user.person?.name || user.email)}>
-        <Avatar name={user.person?.name || user.email} size={32} tone="secondary" />
+      {/* Members' me-block links to their profile; admins have no person profile */}
+      <Me className="shell-nav__me" isAdmin={user.is_admin} {...tip(user.person?.name || user.email)}>
+        <Avatar
+          name={user.person?.name || user.email}
+          src={assetUrl(user.person?.avatar_url)}
+          size={32}
+          tone="secondary"
+        />
         <span className="shell-nav__metext">
           <span className="shell-nav__mename">{user.person?.name || 'You'}</span>
           <span className="shell-nav__meemail">{user.email}</span>
         </span>
-      </div>
+      </Me>
       <button type="button" className="shell-nav__link" onClick={signOut} {...tip('Sign out')}>
         <Icon name="logout" />
         <span className="shell-nav__label">Sign out</span>

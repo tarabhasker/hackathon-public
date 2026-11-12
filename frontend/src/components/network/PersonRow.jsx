@@ -1,3 +1,4 @@
+import { assetUrl } from '../../api'
 import { ordinal } from '../../lib/network'
 import { Avatar, Badge } from '../ui'
 
@@ -11,7 +12,7 @@ export default function PersonRow({ person, hops, active = false, onPick }) {
       onClick={() => onPick(person)}
       aria-pressed={active}
     >
-      <Avatar name={person.name} size={32} tone={active ? 'primary-soft' : 'neutral'} />
+      <Avatar name={person.name} src={assetUrl(person.avatar_url)} size={32} tone={active ? 'primary-soft' : 'neutral'} />
       <span className="nw-row__text">
         <span className="nw-row__name">{person.name}</span>
         {role && <span className="nw-row__role">{role}</span>}

@@ -1,4 +1,7 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { assetUrl } from '../../api'
+import { useAuth } from '../../hooks/useAuth'
 import { Avatar, Button, Card, Chip, Eyebrow, Icon, Notice } from '../ui'
 import PathSteps from './PathSteps'
 import PersonRow from './PersonRow'
@@ -20,6 +23,7 @@ export default function MobileFind({
   onPick,
 }) {
   const [showMore, setShowMore] = useState(false)
+  const me = useAuth().user.person
   const { target, path, byId, evidence } = network
   const hops = path.length - 1
   const others = rows.filter((r) => r.person.id !== target?.id)
@@ -30,7 +34,7 @@ export default function MobileFind({
       <header className="mf-header">
         <div className="mf-header__top">
           <h1>Who can help you?</h1>
-          <Avatar label="YOU" size={32} tone="secondary" />
+          <Link to="/profile" aria-label="Your profile"><Avatar label="YOU" src={assetUrl(me?.avatar_url)} size={32} tone="secondary" /></Link>
         </div>
         <label htmlFor="mf-q" className="sr-only">Describe what you need</label>
         <div className="mf-searchbox">
@@ -57,9 +61,9 @@ export default function MobileFind({
         {target ? (
           <Card className="mf-match">
             <div className="mf-match__who">
-              <Avatar name={target.name} size={44} tone="primary-soft" ring />
+              <Avatar name={target.name} src={assetUrl(target.avatar_url)} size={44} tone="primary-soft" ring />
               <div className="mf-match__text">
-                <span className="mf-match__name">{target.name}</span>
+                <Link to={`/people/${target.id}`} className="mf-match__name">{target.name}</Link>
                 {role && <span className="mf-match__role">{role}</span>}
               </div>
               <span className="mf-match__hops">

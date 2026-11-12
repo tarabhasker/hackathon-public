@@ -4,6 +4,7 @@ import { api } from '../api'
 import { QrCode } from '../components/network/InvitePanel'
 import { Avatar, Badge, Button, Card, Eyebrow, Icon, Notice, Spinner, TextField, useToast } from '../components/ui'
 import { useCopied } from '../hooks/useCopied'
+import { useCountUp } from '../hooks/useCountUp'
 import { joinUrl } from '../lib/events'
 import { timeAgo } from '../lib/time'
 
@@ -58,6 +59,7 @@ export default function AdminEvent() {
   const [presenting, setPresenting] = useState(false)
   const [busy, setBusy] = useState(null)
   const [copied, copy] = useCopied()
+  const joinedCount = useCountUp(event?.members.length ?? 0)
   const seen = useRef(null) // user ids we've already shown, to announce newcomers
 
   const load = useCallback(async () => {
@@ -217,7 +219,7 @@ export default function AdminEvent() {
           <div className="ev-people__head">
             <div>
               <Eyebrow>Joined</Eyebrow>
-              <span className="ev-people__count">{event.members.length}</span>
+              <span className="ev-people__count">{joinedCount}</span>
             </div>
             <div className="ev-people__tools">
               <span className={`ev-live ${live ? '' : 'ev-live--off'}`}>{live ? 'Live' : 'Reconnecting…'}</span>

@@ -3,12 +3,16 @@ import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { Badge, Button, Card, Eyebrow, Icon, Spinner, TextField, useToast } from '../components/ui'
 import { useAuth } from '../hooks/useAuth'
+import { useCountUp } from '../hooks/useCountUp'
 import { timeAgo } from '../lib/time'
 
 function Stat({ label, value, sub }) {
+  // animate plain numbers; leave formatted values ("94%", "6,067") as they are
+  const numeric = typeof value === 'number'
+  const counted = useCountUp(numeric ? value : 0)
   return (
     <Card className="admin-stat">
-      <span className="admin-stat__value">{value}</span>
+      <span className="admin-stat__value">{numeric ? counted : value}</span>
       <span className="admin-stat__label">{label}</span>
       {sub && <span className="admin-stat__sub">{sub}</span>}
     </Card>
@@ -101,16 +105,22 @@ export default function Admin() {
   return (
     <div className="admin">
       <header className="admin-head">
-        <h1>Admin</h1>
-        <span>Signed in as {user.email}</span>
+        <div>
+          <h1>Welcome back</h1>
+          <p className="admin-head__sub">Host events, watch the room fill up, and keep the network tidy.</p>
+        </div>
+        <span className="admin-head__who">{user.email}</span>
       </header>
 
-      <section className="admin-section">
-        <Eyebrow>Host an event</Eyebrow>
+      <section className="admin-section" style={{ '--d': '0ms' }}>
         <Card className="admin-create">
-          <p className="admin-create__lead">
-            Each event gets a QR code. People who scan it sign in or register and are added to the event automatically.
-          </p>
+          <div className="admin-create__copy">
+            <h2>Host an event</h2>
+            <p>
+              Every event gets its own QR code. People scan it, sign in or register,
+              and appear in your attendee list the moment they join.
+            </p>
+          </div>
           <form className="admin-create__form" onSubmit={createEvent}>
             <TextField
               label="Event name"
@@ -129,13 +139,13 @@ export default function Admin() {
               disabled={creating}
             />
             <Button type="submit" variant="primary" size="lg" disabled={creating || !draft.name.trim()}>
-              {creating ? <><Spinner size={16} /> Creating…</> : 'Create event & get QR code'}
+              {creating ? <><Spinner size={16} /> Creating…</> : <>Create & get QR <Icon name="chevron" size={15} /></>}
             </Button>
           </form>
         </Card>
       </section>
 
-      <section className="admin-section">
+      <section className="admin-section" style={{ '--d': '70ms' }}>
         <Eyebrow>Your events</Eyebrow>
         {events.length === 0 ? (
           <Card className="admin-empty">
@@ -144,24 +154,32 @@ export default function Admin() {
           </Card>
         ) : (
           <div className="admin-events">
-            {events.map((ev) => (
-              <Link key={ev.id} to={`/admin/events/${ev.id}`} className="admin-event">
+            {events.map((ev, i) => (
+              <Link
+                key={ev.id}
+                to={`/admin/events/${ev.id}`}
+                className="admin-event"
+                style={{ '--d': `${Math.min(i * 55, 330)}ms` }}
+              >
                 <div className="admin-event__top">
                   <strong className="admin-event__name">{ev.name}</strong>
-                  <Badge tone={ev.is_open ? 'primary' : 'warn'}>{ev.is_open ? 'Open' : 'Closed'}</Badge>
+                  <span className={`ev-state ${ev.is_open ? 'ev-state--open' : 'ev-state--closed'}`}>
+                    {ev.is_open ? 'Open' : 'Closed'}
+                  </span>
                 </div>
                 {ev.description && <span className="admin-event__desc">{ev.description}</span>}
                 <div className="admin-event__meta">
                   <span><Icon name="users" size={14} /> {ev.member_count} joined</span>
                   <span>{timeAgo(ev.created_at)}</span>
                 </div>
+                <span className="admin-event__go" aria-hidden="true"><Icon name="chevron" size={16} /></span>
               </Link>
             ))}
           </div>
         )}
       </section>
 
-      <section className="admin-section">
+      <section className="admin-section" style={{ '--d': '140ms' }}>
         <Eyebrow>Overview</Eyebrow>
         <div className="admin-stats">
           <Stat label="Events" value={events.length} sub={`${totalJoined} total joins`} />
@@ -177,7 +195,7 @@ export default function Admin() {
         </div>
       </section>
 
-      <section className="admin-section">
+      <section className="admin-section" style={{ '--d': '210ms' }}>
         <Eyebrow>Accounts</Eyebrow>
         <Card className="admin-tablewrap">
           <table className="admin-table">

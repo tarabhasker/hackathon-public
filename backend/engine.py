@@ -130,7 +130,7 @@ def search(conn, query: str, requester_id: int, limit: int = 5) -> list[dict]:
         r.id: dict(r._mapping)
         for r in conn.execute(
             text(
-                "SELECT id, name, title, org_unit, opt_in, is_real, avatar_key "
+                "SELECT id, name, title, org_unit, opt_in, is_real, avatar_key, linkedin_url "
                 "FROM people WHERE id = ANY(:ids)"
             ),
             {"ids": list(ids)},
@@ -180,6 +180,7 @@ def search(conn, query: str, requester_id: int, limit: int = 5) -> list[dict]:
                 "person": {
                     **{k: person[k] for k in ("id", "name", "title", "org_unit", "is_real")},
                     "avatar_url": avatar_url(person["avatar_key"]),
+                    "linkedin_url": person["linkedin_url"],
                 },
                 "score": round(score, 4),
                 "relevance": round(c["relevance"], 3),
@@ -275,7 +276,7 @@ def network(
         r.id: r
         for r in conn.execute(
             text(
-                "SELECT p.id, p.name, p.title, p.org_unit, p.is_real, p.avatar_key, cur.org AS company "
+                "SELECT p.id, p.name, p.title, p.org_unit, p.is_real, p.avatar_key, p.linkedin_url, cur.org AS company "
                 "FROM people p "
                 "LEFT JOIN LATERAL ("
                 "  SELECT org FROM positions WHERE person_id = p.id "
@@ -302,6 +303,7 @@ def network(
                 "company": person.company,
                 "is_real": person.is_real,
                 "avatar_url": avatar_url(person.avatar_key),
+                "linkedin_url": person.linkedin_url,
                 "depth": len(p) - 1,
                 "via": p[-2] if len(p) > 1 else None,
                 "strength": round(strength(n), 3) if n != requester_id else 1.0,

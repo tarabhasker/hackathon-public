@@ -15,6 +15,7 @@ export default function ProfileEditForm({ profile, onSaved, onAvatar, onCancel }
     skills: profile.skills.join(', '),
     offer: profile.offer || '',
     ask: profile.ask || '',
+    linkedin_url: profile.linkedin_url || '',
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -47,6 +48,14 @@ export default function ProfileEditForm({ profile, onSaved, onAvatar, onCancel }
         value={form.skills}
         onChange={set('skills')}
         hint="Comma-separated. This is what people will find you for."
+      />
+      <TextField
+        label="LinkedIn profile"
+        value={form.linkedin_url}
+        onChange={set('linkedin_url')}
+        placeholder="linkedin.com/in/your-name"
+        hint="Intro requests and messages to you open here."
+        autoComplete="url"
       />
       <TextField label="What can you help others with?" value={form.offer} onChange={set('offer')} />
       <TextField label="What would you like help with?" value={form.ask} onChange={set('ask')} />

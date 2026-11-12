@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import EventsPanel from '../components/events/EventsPanel'
+import IntroDialog from '../components/network/IntroDialog'
 import MobileFind from '../components/network/MobileFind'
 import NetworkGraph from '../components/network/NetworkGraph'
 import PathCard from '../components/network/PathCard'
@@ -7,11 +8,10 @@ import SearchPanel from '../components/network/SearchPanel'
 import { Button, Icon, Notice, useToast } from '../components/ui'
 import { api } from '../api'
 import { useAuth } from '../hooks/useAuth'
-import { useCopied } from '../hooks/useCopied'
 import { MOBILE_QUERY, useMediaQuery } from '../hooks/useMediaQuery'
 import { useNetwork } from '../hooks/useNetwork'
 import { usePeopleSearch } from '../hooks/usePeopleSearch'
-import { ctaLabel, describePath, draftMessage, ordinal } from '../lib/network'
+import { ctaLabel, describePath, ordinal } from '../lib/network'
 import { MAX_DEGREES } from '../hooks/useNetwork'
 
 const ZOOM = { min: 0.6, max: 1.6, step: 0.2 }
@@ -48,7 +48,7 @@ export default function Network() {
     }
   }
   const search = usePeopleSearch(query, { limit: 20 })
-  const [ctaDone, copyDraft] = useCopied(2600)
+  const [introOpen, setIntroOpen] = useState(false)
   const toast = useToast()
   const [connectingId, setConnectingId] = useState(null)
   // people connected during this visit, so their rows flip to ✓ at once
@@ -102,11 +102,16 @@ export default function Network() {
     [network.nodes],
   )
   const cta = target ? ctaLabel(path, byId) : ''
-  const onCta = () => copyDraft(draftMessage(path, byId, target, query.trim()))
+  const onCta = () => setIntroOpen(true)
+  const intro = introOpen && target && (
+    <IntroDialog path={path} byId={byId} target={target} need={query.trim()} onClose={() => setIntroOpen(false)} />
+  )
   const heading = search.results ? 'Best matches' : 'Suggested for you'
 
   if (isMobile) {
     return (
+      <>
+      {intro}
       <MobileFind
         query={query}
         onQuery={setQuery}
@@ -118,7 +123,6 @@ export default function Network() {
         rows={rows}
         network={network}
         ctaLabel={cta}
-        ctaDone={ctaDone}
         onCta={onCta}
         onPick={select}
         onConnect={connect}
@@ -127,6 +131,7 @@ export default function Network() {
       >
         <EventsPanel />
       </MobileFind>
+      </>
     )
   }
 
@@ -134,6 +139,7 @@ export default function Network() {
 
   return (
     <div className="nw">
+      {intro}
       <section className="nw-main">
         <div className="nw-head">
           <div>
@@ -209,8 +215,7 @@ export default function Network() {
               target={target}
               pathText={describePath(path, byId, evidence)}
               ctaLabel={cta}
-              ctaDone={ctaDone}
-              onCta={onCta}
+                    onCta={onCta}
             />
           ) : (
             alone && (

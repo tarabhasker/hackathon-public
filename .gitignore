@@ -26,3 +26,4 @@ dist/
 
 # python cache
 __pycache__/
+.neon

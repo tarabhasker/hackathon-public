@@ -143,7 +143,7 @@
   justify-content: center;
   font-weight: 700;
   letter-spacing: 0.02em;
-  box-shadow: 0 6px 14px -6px rgba(15, 40, 38, 0.45);
+  box-shadow: 0 6px 14px -6px color-mix(in srgb, var(--secondary) 45%, transparent);
   transition: box-shadow 0.2s;
 }
 .nw-node__img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -159,13 +159,13 @@
   height: 100%;
   background:
     radial-gradient(ellipse 14% 9% at 12% 30%, rgba(255, 255, 255, 0.55), transparent 70%),
-    radial-gradient(ellipse 18% 8% at 34% 68%, rgba(20, 50, 46, 0.2), transparent 70%),
+    radial-gradient(ellipse 18% 8% at 34% 68%, color-mix(in srgb, var(--secondary) 20%, transparent), transparent 70%),
     radial-gradient(ellipse 12% 10% at 62% 30%, rgba(255, 255, 255, 0.55), transparent 70%),
-    radial-gradient(ellipse 18% 8% at 84% 68%, rgba(20, 50, 46, 0.2), transparent 70%),
+    radial-gradient(ellipse 18% 8% at 84% 68%, color-mix(in srgb, var(--secondary) 20%, transparent), transparent 70%),
     repeating-linear-gradient(
       180deg,
       transparent 0 16%,
-      rgba(20, 50, 46, 0.1) 16% 24%,
+      color-mix(in srgb, var(--secondary) 10%, transparent) 16% 24%,
       transparent 24% 46%,
       rgba(255, 255, 255, 0.3) 46% 54%
     );
@@ -179,8 +179,8 @@
   border-radius: inherit;
   background:
     radial-gradient(circle at var(--lx, 32%) var(--ly, 30%), rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0.2) 18%, transparent 42%),
-    radial-gradient(circle at calc(100% - var(--lx, 32%)) calc(100% - var(--ly, 30%)), rgba(30, 69, 66, 0.6) 0%, rgba(30, 69, 66, 0.22) 36%, transparent 64%);
-  box-shadow: inset 0 0 0 1px rgba(15, 40, 38, 0.12);
+    radial-gradient(circle at calc(100% - var(--lx, 32%)) calc(100% - var(--ly, 30%)), color-mix(in srgb, var(--secondary) 60%, transparent) 0%, color-mix(in srgb, var(--secondary) 22%, transparent) 36%, transparent 64%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--secondary) 12%, transparent);
 }
 
 /* Moons only show their name when they are on your path or hovered (the tooltip covers the rest) */
@@ -204,13 +204,13 @@
 .nw-node--target .nw-node__av {
   --planet: var(--primary);
   color: var(--primary-ink);
-  box-shadow: 0 0 0 3px var(--ds-surface), 0 0 0 6px var(--primary), 0 8px 18px -6px rgba(15, 40, 38, 0.5);
+  box-shadow: 0 0 0 3px var(--ds-surface), 0 0 0 6px var(--primary), 0 8px 18px -6px color-mix(in srgb, var(--secondary) 50%, transparent);
 }
 .nw-node--target .nw-node__initials { text-shadow: none; }
 .nw-node--path .nw-node__av {
   --planet: var(--primary-soft);
   color: var(--primary-soft-ink);
-  box-shadow: 0 0 0 2px var(--ds-surface), 0 0 0 4.5px var(--primary), 0 6px 14px -6px rgba(15, 40, 38, 0.45);
+  box-shadow: 0 0 0 2px var(--ds-surface), 0 0 0 4.5px var(--primary), 0 6px 14px -6px color-mix(in srgb, var(--secondary) 45%, transparent);
 }
 .nw-node:not(.nw-node--you):hover .nw-node__av { box-shadow: 0 0 0 4px var(--ds-surface), 0 0 0 7px var(--secondary); }
 

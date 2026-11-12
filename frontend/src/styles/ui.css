@@ -239,9 +239,9 @@
   margin-top: 5px;
   flex: 0 0 auto;
 }
-.toast--danger .toast__dot { background: #FF8A7A; }
-.toast--ok .toast__dot { background: #7BCD96; }
-.toast--info .toast__dot { background: #9BB8FF; }
+.toast--danger .toast__dot { background: color-mix(in srgb, var(--ds-danger) 55%, white); }
+.toast--ok .toast__dot { background: color-mix(in srgb, var(--ds-ok) 50%, white); }
+.toast--info .toast__dot { background: var(--logo-c); }
 .toast__msg { flex: 1; }
 .toast__close {
   border: none;

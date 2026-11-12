@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { API_BASE } from '../api'
 
-const CONFETTI_COLORS = ['#ae0001', '#d3a625', '#f4d03f', '#e74c3c', '#f8c471']
+// Confetti and crest use the app palette (styles/tokens.css)
+const CONFETTI_COLORS = ['var(--secondary)', 'var(--primary)', 'var(--logo-c)', 'var(--chart-2)', 'var(--ds-bg-tint)']
 
 function LionCrest() {
   return (
@@ -9,14 +10,14 @@ function LionCrest() {
       <svg viewBox="0 0 120 140" className="crest-shield">
         <defs>
           <linearGradient id="shieldGrad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#ae0001" />
-            <stop offset="100%" stopColor="#7a0000" />
+            <stop offset="0%" stopColor="var(--primary)" />
+            <stop offset="100%" stopColor="var(--secondary)" />
           </linearGradient>
         </defs>
         <path
           d="M60 4 L112 20 V72 C112 104 90 126 60 136 C30 126 8 104 8 72 V20 Z"
           fill="url(#shieldGrad)"
-          stroke="#d3a625"
+          stroke="var(--ds-bg-tint)"
           strokeWidth="5"
         />
       </svg>

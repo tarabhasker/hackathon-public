@@ -35,6 +35,21 @@ const PATHS = {
   logout: <path d="M10 4H5v16h5M15 8l4 4-4 4M19 12H9" />,
   check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
   upload: <path d="M12 16V4M7 9l5-5 5 5M4 20h16" />,
+  download: <path d="M12 4v12M7 11l5 5 5-5M4 20h16" />,
+  sidebar: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2.5" />
+      <path d="M9.5 4v16" />
+    </>
+  ),
+  calendar: (
+    <>
+      <rect x="3.5" y="5" width="17" height="15" rx="2.5" />
+      <path d="M3.5 10h17M8 3v4M16 3v4" />
+    </>
+  ),
+  expand: <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />,
+  trash: <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6" />,
 }
 
 export default function Icon({ name, size = 18, strokeWidth = 1.8, ...rest }) {

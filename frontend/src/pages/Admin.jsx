@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api'
-import { Badge, Button, Card, Eyebrow, Spinner, useToast } from '../components/ui'
+import { Badge, Button, Card, Eyebrow, Icon, Spinner, TextField, useToast } from '../components/ui'
 import { useAuth } from '../hooks/useAuth'
+import { timeAgo } from '../lib/time'
 
 function Stat({ label, value, sub }) {
   return (
@@ -16,15 +18,24 @@ function Stat({ label, value, sub }) {
 export default function Admin() {
   const { user } = useAuth()
   const toast = useToast()
+  const navigate = useNavigate()
   const [overview, setOverview] = useState(null)
   const [users, setUsers] = useState(null)
+  const [events, setEvents] = useState(null)
   const [busyId, setBusyId] = useState(null)
+  const [draft, setDraft] = useState({ name: '', description: '' })
+  const [creating, setCreating] = useState(false)
 
   const load = useCallback(async () => {
     try {
-      const [ov, us] = await Promise.all([api('/api/admin/overview'), api('/api/admin/users')])
+      const [ov, us, ev] = await Promise.all([
+        api('/api/admin/overview'),
+        api('/api/admin/users'),
+        api('/api/admin/events'),
+      ])
       setOverview(ov)
       setUsers(us)
+      setEvents(ev)
     } catch (err) {
       toast.error(err.message)
     }
@@ -33,6 +44,19 @@ export default function Admin() {
   useEffect(() => {
     load()
   }, [load])
+
+  async function createEvent(e) {
+    e.preventDefault()
+    setCreating(true)
+    try {
+      const created = await api('/api/admin/events', { method: 'POST', body: draft })
+      toast.success(`${created.name} is ready — share its QR code.`)
+      navigate(`/admin/events/${created.id}`)
+    } catch (err) {
+      toast.error(err.message)
+      setCreating(false)
+    }
+  }
 
   async function toggleAdmin(u) {
     setBusyId(u.id)
@@ -61,7 +85,7 @@ export default function Admin() {
     }
   }
 
-  if (!overview || !users) {
+  if (!overview || !users || !events) {
     return (
       <div className="admin admin--loading" role="status">
         <Spinner size={22} /> Loading admin data…
@@ -72,6 +96,7 @@ export default function Admin() {
   const embeddedPct = overview.facets
     ? Math.round((overview.embedded_facets / overview.facets) * 100)
     : 0
+  const totalJoined = events.reduce((sum, ev) => sum + Number(ev.member_count), 0)
 
   return (
     <div className="admin">
@@ -80,19 +105,79 @@ export default function Admin() {
         <span>Signed in as {user.email}</span>
       </header>
 
-      <div className="admin-stats">
-        <Stat label="Accounts" value={overview.users} />
-        <Stat
-          label="People in graph"
-          value={overview.people}
-          sub={`${overview.real_people} real · ${overview.people - overview.real_people} synthetic`}
-        />
-        <Stat label="Edges" value={overview.edges.toLocaleString()} />
-        <Stat label="Facets embedded" value={`${embeddedPct}%`} sub={`${overview.embedded_facets}/${overview.facets}`} />
-        <Stat label="Quiz entries" value={overview.quiz_entries} />
-      </div>
+      <section className="admin-section">
+        <Eyebrow>Host an event</Eyebrow>
+        <Card className="admin-create">
+          <p className="admin-create__lead">
+            Each event gets a QR code. People who scan it sign in or register and are added to the event automatically.
+          </p>
+          <form className="admin-create__form" onSubmit={createEvent}>
+            <TextField
+              label="Event name"
+              value={draft.name}
+              onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+              placeholder="e.g. Hackathon kickoff mixer"
+              maxLength={120}
+              required
+              disabled={creating}
+            />
+            <TextField
+              label="Description (optional)"
+              value={draft.description}
+              onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
+              placeholder="Shown to people when they scan the code"
+              disabled={creating}
+            />
+            <Button type="submit" variant="primary" size="lg" disabled={creating || !draft.name.trim()}>
+              {creating ? <><Spinner size={16} /> Creating…</> : 'Create event & get QR code'}
+            </Button>
+          </form>
+        </Card>
+      </section>
 
-      <section>
+      <section className="admin-section">
+        <Eyebrow>Your events</Eyebrow>
+        {events.length === 0 ? (
+          <Card className="admin-empty">
+            <Icon name="calendar" size={22} />
+            <span>No events yet. Create one above, then show its QR code so people can scan to join.</span>
+          </Card>
+        ) : (
+          <div className="admin-events">
+            {events.map((ev) => (
+              <Link key={ev.id} to={`/admin/events/${ev.id}`} className="admin-event">
+                <div className="admin-event__top">
+                  <strong className="admin-event__name">{ev.name}</strong>
+                  <Badge tone={ev.is_open ? 'primary' : 'warn'}>{ev.is_open ? 'Open' : 'Closed'}</Badge>
+                </div>
+                {ev.description && <span className="admin-event__desc">{ev.description}</span>}
+                <div className="admin-event__meta">
+                  <span><Icon name="users" size={14} /> {ev.member_count} joined</span>
+                  <span>{timeAgo(ev.created_at)}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="admin-section">
+        <Eyebrow>Overview</Eyebrow>
+        <div className="admin-stats">
+          <Stat label="Events" value={events.length} sub={`${totalJoined} total joins`} />
+          <Stat label="Accounts" value={overview.users} />
+          <Stat
+            label="People in graph"
+            value={overview.people}
+            sub={`${overview.real_people} real · ${overview.people - overview.real_people} synthetic`}
+          />
+          <Stat label="Edges" value={overview.edges.toLocaleString()} />
+          <Stat label="Facets embedded" value={`${embeddedPct}%`} sub={`${overview.embedded_facets}/${overview.facets}`} />
+          <Stat label="Quiz entries" value={overview.quiz_entries} />
+        </div>
+      </section>
+
+      <section className="admin-section">
         <Eyebrow>Accounts</Eyebrow>
         <Card className="admin-tablewrap">
           <table className="admin-table">

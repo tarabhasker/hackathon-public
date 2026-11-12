@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import AuthLayout from '../components/layout/AuthLayout'
-import { Button, Spinner, TextField, useToast } from '../components/ui'
+import { Button, Notice, Spinner, TextField, useToast } from '../components/ui'
 import { useAuth } from '../hooks/useAuth'
+import { getPendingEvent } from '../lib/events'
 
 function EyeIcon({ open }) {
   return (
@@ -36,6 +37,8 @@ function AuthForm({ mode }) {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [busy, setBusy] = useState(false)
+  // set when they arrived by scanning an event's QR code
+  const [pendingEvent] = useState(getPendingEvent)
 
   const strength = strengthOf(password)
 
@@ -67,6 +70,12 @@ function AuthForm({ mode }) {
       }
     >
       <form className="form" onSubmit={submit}>
+        {pendingEvent && (
+          <Notice tone="ok">
+            You're joining <strong>{pendingEvent.name}</strong>.{' '}
+            {isRegister ? 'Create an account' : 'Sign in'} to continue.
+          </Notice>
+        )}
         <TextField
           label="Work email"
           type="email"

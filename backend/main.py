@@ -1,4 +1,5 @@
 import os
+import secrets
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -102,6 +103,11 @@ class SearchRequest(BaseModel):
     # kept optional so older clients sending it don't break
     requester_id: int | None = None
     limit: int = 5
+
+
+class EventCreate(BaseModel):
+    name: str
+    description: str | None = None
 
 
 class Credentials(BaseModel):
@@ -319,6 +325,155 @@ def admin_delete_person(person_id: int, authorization: str | None = Header(defau
         result = conn.execute(text("DELETE FROM people WHERE id = :id"), {"id": person_id})
     if result.rowcount == 0:
         raise HTTPException(status_code=404, detail="Person not found")
+
+
+# --- Events -------------------------------------------------------------------------
+# Admins host events. Each has a short code embedded in a QR; scanning it opens
+# /join/<code>, which sends people through sign-in/registration and then joins them.
+
+_CODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"  # no look-alikes (i, l, o, 0, 1)
+
+
+def _event_payload(row) -> dict:
+    return {
+        "id": row.id,
+        "code": row.code,
+        "name": row.name,
+        "description": row.description,
+        "is_open": row.is_open,
+        "created_at": row.created_at,
+    }
+
+
+@app.post("/api/admin/events", status_code=201)
+def create_event(body: EventCreate, authorization: str | None = Header(default=None)):
+    admin_id = _require_admin(authorization)
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Give the event a name")
+    if len(name) > 120:
+        raise HTTPException(status_code=400, detail="Event name is too long (max 120 characters)")
+    description = (body.description or "").strip() or None
+
+    for _ in range(5):  # a collision on a 7-char code is astronomically unlikely; retry anyway
+        code = "".join(secrets.choice(_CODE_ALPHABET) for _ in range(7))
+        try:
+            with engine.begin() as conn:
+                row = conn.execute(
+                    text(
+                        "INSERT INTO events (code, name, description, host_user_id) "
+                        "VALUES (:c, :n, :d, :h) "
+                        "RETURNING id, code, name, description, is_open, created_at"
+                    ),
+                    {"c": code, "n": name, "d": description, "h": admin_id},
+                ).one()
+            return {**_event_payload(row), "member_count": 0}
+        except IntegrityError:
+            continue
+    raise HTTPException(status_code=500, detail="Could not generate an event code — try again")
+
+
+@app.get("/api/admin/events")
+def list_events(authorization: str | None = Header(default=None)):
+    _require_admin(authorization)
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT e.id, e.code, e.name, e.description, e.is_open, e.created_at, "
+                "COUNT(m.id) AS member_count "
+                "FROM events e LEFT JOIN event_members m ON m.event_id = e.id "
+                "GROUP BY e.id ORDER BY e.created_at DESC"
+            )
+        ).mappings().all()
+    return [dict(r) for r in rows]
+
+
+@app.get("/api/admin/events/{event_id}")
+def get_event(event_id: int, authorization: str | None = Header(default=None)):
+    _require_admin(authorization)
+    with engine.connect() as conn:
+        event = conn.execute(
+            text(
+                "SELECT id, code, name, description, is_open, created_at "
+                "FROM events WHERE id = :id"
+            ),
+            {"id": event_id},
+        ).first()
+        if event is None:
+            raise HTTPException(status_code=404, detail="Event not found")
+        members = conn.execute(
+            text(
+                "SELECT u.id AS user_id, u.email, m.joined_at, "
+                "p.id AS person_id, p.name, p.title, p.org_unit "
+                "FROM event_members m "
+                "JOIN users u ON u.id = m.user_id "
+                "LEFT JOIN people p ON p.id = u.person_id "
+                "WHERE m.event_id = :id ORDER BY m.joined_at DESC"
+            ),
+            {"id": event_id},
+        ).mappings().all()
+    return {**_event_payload(event), "members": [dict(m) for m in members]}
+
+
+@app.post("/api/admin/events/{event_id}/toggle-open")
+def toggle_event_open(event_id: int, authorization: str | None = Header(default=None)):
+    _require_admin(authorization)
+    with engine.begin() as conn:
+        row = conn.execute(
+            text("UPDATE events SET is_open = NOT is_open WHERE id = :id RETURNING is_open"),
+            {"id": event_id},
+        ).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return {"id": event_id, "is_open": row.is_open}
+
+
+@app.delete("/api/admin/events/{event_id}", status_code=204)
+def delete_event(event_id: int, authorization: str | None = Header(default=None)):
+    _require_admin(authorization)
+    with engine.begin() as conn:
+        result = conn.execute(text("DELETE FROM events WHERE id = :id"), {"id": event_id})
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+
+@app.get("/api/events/{code}")
+def public_event(code: str):
+    """What the QR landing page shows before anyone signs in. No auth, no member data."""
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT id, code, name, description, is_open, created_at FROM events WHERE code = :c"),
+            {"c": code.strip().lower()},
+        ).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="This event link isn't valid")
+    payload = _event_payload(row)
+    return {k: payload[k] for k in ("code", "name", "description", "is_open")}
+
+
+@app.post("/api/events/{code}/join")
+def join_event(code: str, authorization: str | None = Header(default=None)):
+    user_id = _require_user(authorization)
+    with engine.begin() as conn:
+        event = conn.execute(
+            text("SELECT id, name, is_open FROM events WHERE code = :c"),
+            {"c": code.strip().lower()},
+        ).first()
+        if event is None:
+            raise HTTPException(status_code=404, detail="This event link isn't valid")
+        already = conn.execute(
+            text("SELECT 1 FROM event_members WHERE event_id = :e AND user_id = :u"),
+            {"e": event.id, "u": user_id},
+        ).first()
+        if already:
+            return {"event": event.name, "already_joined": True}
+        if not event.is_open:
+            raise HTTPException(status_code=403, detail=f"{event.name} is no longer accepting people")
+        conn.execute(
+            text("INSERT INTO event_members (event_id, user_id) VALUES (:e, :u)"),
+            {"e": event.id, "u": user_id},
+        )
+    return {"event": event.name, "already_joined": False}
 
 
 # --- 6 Degrees API ----------------------------------------------------------------

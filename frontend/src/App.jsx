@@ -1,10 +1,13 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import AppShell from './components/layout/AppShell'
 import { GuestOnly, RequireAdmin, RequireAuth, RequireProfile } from './components/layout/guards'
+import PendingEventJoiner from './components/events/PendingEventJoiner'
 import { ToastProvider } from './components/ui'
 import { AuthProvider } from './hooks/useAuth'
 import Admin from './pages/Admin'
+import AdminEvent from './pages/AdminEvent'
 import { Register, SignIn } from './pages/AuthForm'
+import JoinEvent from './pages/JoinEvent'
 import Network from './pages/Network'
 import Quiz from './pages/Quiz'
 import Setup from './pages/Setup'
@@ -15,7 +18,9 @@ export default function App() {
     <BrowserRouter>
       <ToastProvider>
       <AuthProvider>
+        <PendingEventJoiner />
         <Routes>
+          <Route path="/join/:code" element={<JoinEvent />} />
           <Route element={<GuestOnly />}>
             <Route path="/signin" element={<SignIn />} />
             <Route path="/register" element={<Register />} />
@@ -26,6 +31,7 @@ export default function App() {
             <Route element={<RequireAdmin />}>
               <Route element={<AppShell />}>
                 <Route path="/admin" element={<Admin />} />
+                <Route path="/admin/events/:id" element={<AdminEvent />} />
               </Route>
             </Route>
             <Route element={<RequireProfile />}>

@@ -42,6 +42,7 @@ const PATHS = {
     </>
   ),
   back: <path d="M15 6l-6 6 6 6" />,
+  folder: <path d="M3.5 6.5h6l2 2.5h9v10.5h-17z" />,
   pencil: <path d="M4 20l1-4.5L16.5 4 20 7.5 8.5 19zM14 6.5l3.5 3.5" />,
   camera: (
     <>

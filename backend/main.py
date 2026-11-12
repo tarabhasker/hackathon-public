@@ -775,6 +775,99 @@ def connect_person(
     return {"connected": True, "already": res.rowcount == 0, "person": other.name}
 
 
+# --- Coffee chats -------------------------------------------------------------------
+# A scheduled kopi between two people. The Google Calendar invite is built on
+# the client; this is the app's own record, so the calendar page can show it.
+
+class CoffeeChatCreate(BaseModel):
+    person_id: int
+    starts_at: str  # ISO 8601
+    duration_minutes: int = 30
+    location: str | None = None
+    event_name: str | None = None
+
+
+def _chat_person(row, prefix: str) -> dict:
+    return {
+        "id": row[f"{prefix}_id"],
+        "name": row[f"{prefix}_name"],
+        "title": row[f"{prefix}_title"],
+        "avatar_url": _avatar_url(row[f"{prefix}_avatar"]),
+    }
+
+
+@app.post("/api/coffee-chats", status_code=201)
+def create_coffee_chat(body: CoffeeChatCreate, authorization: str | None = Header(default=None)):
+    from datetime import datetime
+
+    me = _require_person(authorization)
+    if body.person_id == me:
+        raise HTTPException(status_code=400, detail="That's you — invite someone else")
+    try:
+        starts_at = datetime.fromisoformat(body.starts_at.replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="'starts_at' must be an ISO 8601 timestamp")
+    duration = max(5, min(240, body.duration_minutes))
+    with engine.begin() as conn:
+        other = conn.execute(
+            text("SELECT 1 FROM people WHERE id = :id"), {"id": body.person_id}
+        ).first()
+        if other is None:
+            raise HTTPException(status_code=404, detail="That person isn't in the network")
+        chat_id = conn.execute(text(
+            "INSERT INTO coffee_chats (inviter_id, invitee_id, starts_at, duration_minutes, location, event_name) "
+            "VALUES (:a, :b, :s, :d, :l, :e) RETURNING id"
+        ), {
+            "a": me, "b": body.person_id, "s": starts_at, "d": duration,
+            "l": (body.location or "").strip() or None,
+            "e": (body.event_name or "").strip() or None,
+        }).scalar_one()
+    return {"id": chat_id}
+
+
+@app.get("/api/coffee-chats")
+def list_coffee_chats(authorization: str | None = Header(default=None)):
+    """Every coffee chat the signed-in person is part of, soonest first."""
+    me = _require_person(authorization)
+    with engine.connect() as conn:
+        rows = conn.execute(text(
+            "SELECT c.id, c.starts_at, c.duration_minutes, c.location, c.event_name, c.created_at, "
+            "a.id AS inviter_id, a.name AS inviter_name, a.title AS inviter_title, a.avatar_key AS inviter_avatar, "
+            "b.id AS invitee_id, b.name AS invitee_name, b.title AS invitee_title, b.avatar_key AS invitee_avatar, "
+            "ub.email AS invitee_email "
+            "FROM coffee_chats c "
+            "JOIN people a ON a.id = c.inviter_id "
+            "JOIN people b ON b.id = c.invitee_id "
+            "LEFT JOIN users ub ON ub.person_id = b.id "
+            "WHERE c.inviter_id = :me OR c.invitee_id = :me "
+            "ORDER BY c.starts_at"
+        ), {"me": me}).mappings().all()
+    return [
+        {
+            "id": r["id"],
+            "starts_at": r["starts_at"],
+            "duration_minutes": r["duration_minutes"],
+            "location": r["location"],
+            "event_name": r["event_name"],
+            "is_inviter": r["inviter_id"] == me,
+            "inviter": _chat_person(r, "inviter"),
+            "invitee": {**_chat_person(r, "invitee"), "email": r["invitee_email"]},
+        }
+        for r in rows
+    ]
+
+
+@app.delete("/api/coffee-chats/{chat_id}", status_code=204)
+def cancel_coffee_chat(chat_id: int, authorization: str | None = Header(default=None)):
+    me = _require_person(authorization)
+    with engine.begin() as conn:
+        result = conn.execute(text(
+            "DELETE FROM coffee_chats WHERE id = :id AND (inviter_id = :me OR invitee_id = :me)"
+        ), {"id": chat_id, "me": me})
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="That coffee chat isn't yours to cancel")
+
+
 # --- 6 Degrees API ----------------------------------------------------------------
 
 @app.get("/api/projects")

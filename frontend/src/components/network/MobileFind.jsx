@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { assetUrl } from '../../api'
 import { useAuth } from '../../hooks/useAuth'
-import { Avatar, Button, Card, Chip, Eyebrow, Icon, Notice } from '../ui'
+import { MAX_DEGREES } from '../../hooks/useNetwork'
+import { Avatar, Button, Card, Eyebrow, Icon, Notice } from '../ui'
+import NetworkGraph from './NetworkGraph'
 import PathSteps from './PathSteps'
 import PersonRow from './PersonRow'
 
@@ -10,8 +12,6 @@ import PersonRow from './PersonRow'
 export default function MobileFind({
   query,
   onQuery,
-  scope,
-  onScope,
   heading,
   searching,
   error,
@@ -39,6 +39,10 @@ export default function MobileFind({
           <h1>Who can help you?</h1>
           <Link to="/profile" aria-label="Your profile"><Avatar label="YOU" src={assetUrl(me?.avatar_url)} size={32} tone="secondary" /></Link>
         </div>
+      </header>
+
+      {/* stays pinned while the rest scrolls, so search is always at hand */}
+      <div className="mf-sticky">
         <label htmlFor="mf-q" className="sr-only">Describe what you need</label>
         <div className="mf-searchbox">
           <Icon name="search" />
@@ -47,17 +51,47 @@ export default function MobileFind({
             type="text"
             value={query}
             onChange={(e) => onQuery(e.target.value)}
-            placeholder="Describe what you need…"
+            placeholder="Search skills, topics, people…"
             autoComplete="off"
           />
         </div>
-        <div className="mf-scopes">
-          <Chip selected={scope === 'org'} onClick={() => onScope('org')}>Whole organisation</Chip>
-          <Chip selected={scope === 'division'} onClick={() => onScope('division')}>My division</Chip>
-        </div>
-      </header>
+      </div>
 
       <div className="mf-body">
+        <section className="mf-map" aria-label="Your network graph">
+          <div className="mf-map__head">
+            <Eyebrow>Your network</Eyebrow>
+            <span className="mf-map__hint">Drag to rotate · tap someone to pick them</span>
+          </div>
+          <label className="mf-degrees">
+            <span className="mf-degrees__label">Degrees</span>
+            <input
+              type="range"
+              min={1}
+              max={MAX_DEGREES}
+              step={1}
+              value={network.degrees}
+              onChange={(e) => network.setDegrees(Number(e.target.value))}
+              aria-label="Degrees of connection shown"
+            />
+            <span className="mf-degrees__val">{network.degrees}°</span>
+          </label>
+          <div className="mf-canvas">
+            {network.loading ? (
+              <span className="mf-canvas__status" role="status">Loading your network…</span>
+            ) : (
+              <NetworkGraph
+                nodes={network.nodes}
+                edges={network.edges}
+                path={path}
+                onSelect={onPick}
+                zoom={1}
+                mode="3d"
+              />
+            )}
+          </div>
+        </section>
+
         <Eyebrow>{searching ? 'Searching…' : heading}</Eyebrow>
         {error && <Notice>{error}</Notice>}
 

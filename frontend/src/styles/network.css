@@ -55,7 +55,7 @@
 .nw-aside {
   flex: 0 0 360px;             /* fixed width */
   min-height: 0;
-  overflow-y: auto;            /* only scrolls itself, on very short windows */
+  overflow-y: auto;            /* scrolls itself when the panels don't fit */
   box-sizing: border-box;
   padding: 28px 20px 32px;
   border-left: 1px solid var(--ds-line);
@@ -64,6 +64,9 @@
   flex-direction: column;
   gap: 24px;
 }
+/* panels keep their natural height; the aside scrolls instead of squashing
+   them (a shrunk coffee-chat card was invisible below the fold) */
+.nw-aside > * { flex-shrink: 0; }
 
 /* --- Canvas ----------------------------------------------------------------- */
 .nw-canvas {
@@ -747,3 +750,71 @@
 .introdlg__steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--secondary-muted); }
 .introdlg__steps .is-done { color: var(--ds-ok-soft-ink); }
 .introdlg__actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+
+/* --- Mobile: the graph, pocket sized ------------------------------------------- */
+.mf-map { display: flex; flex-direction: column; gap: 8px; }
+.mf-map__head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.mf-map__hint { font-size: 11.5px; font-style: italic; color: var(--secondary-muted); text-align: right; }
+.mf-canvas {
+  position: relative;
+  height: min(96vw, 420px);
+  border: 1px solid var(--ds-line);
+  border-radius: var(--ds-radius-lg, 16px);
+  overflow: hidden;
+  background-color: var(--ds-surface);
+  background-image: radial-gradient(var(--ds-line) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+.mf-canvas__status {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--secondary-muted);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+/* degrees-of-connection slider over the mobile graph */
+.mf-degrees {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 2px 2px 0;
+}
+.mf-degrees__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--secondary-muted);
+}
+.mf-degrees input[type='range'] {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 28px; /* generous touch target */
+  accent-color: var(--primary);
+}
+.mf-degrees__val {
+  min-width: 34px;
+  text-align: center;
+  padding: 2px 8px;
+  border: 1px solid var(--ds-line);
+  border-radius: 999px;
+  background: var(--ds-surface);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* the search bar rides along as the page scrolls */
+.mf-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  padding: 8px 20px 10px;
+  background: var(--ds-bg);
+  box-shadow: 0 6px 12px -8px rgb(0 0 0 / 0.14);
+}
+.mf-header { padding-bottom: 0; } /* the sticky search bar supplies the gap */

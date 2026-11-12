@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { API_BASE, assetUrl } from '../../api'
+import { assetUrl } from '../../api'
 import { useAuth } from '../../hooks/useAuth'
 import { Avatar, Icon, Logo } from '../ui'
 
@@ -8,8 +8,8 @@ import { Avatar, Icon, Logo } from '../ui'
 // Admins see only their hosting tools; members see the network app.
 const MEMBER_NAV = [
   { to: '/', label: 'Network', mobileLabel: 'Find', icon: 'network', mobileIcon: 'search', end: true },
+  { to: '/calendar', label: 'Calendar', icon: 'calendar' },
   { to: '/profile', label: 'Profile', icon: 'user' },
-  { to: '/quiz', label: 'Quiz', icon: 'spark' },
 ]
 const ADMIN_NAV = [
   { to: '/admin', label: 'Home', icon: 'home', end: true },
@@ -89,12 +89,6 @@ function Sidebar({ collapsed, onToggle }) {
           <span className="shell-nav__label">{item.label}</span>
         </NavLink>
       ))}
-      {!user.is_admin && (
-        <a className="shell-nav__link" href={`${API_BASE}/docs`} {...tip('API docs')}>
-          <Icon name="users" />
-          <span className="shell-nav__label">API docs</span>
-        </a>
-      )}
       <div className="shell-nav__spacer" />
       {/* Members' me-block links to their profile; admins have no person profile */}
       <Me className="shell-nav__me" isAdmin={user.is_admin} {...tip(user.person?.name || user.email)}>

@@ -116,8 +116,6 @@ export default function Network() {
       <MobileFind
         query={query}
         onQuery={setQuery}
-        scope={scope}
-        onScope={setScope}
         heading={search.results ? 'Top match' : 'Suggested for you'}
         searching={search.searching}
         error={search.error || network.error}

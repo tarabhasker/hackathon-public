@@ -7,6 +7,7 @@ import { AuthProvider } from './hooks/useAuth'
 import Admin from './pages/Admin'
 import AdminEvent from './pages/AdminEvent'
 import { Register, SignIn } from './pages/AuthForm'
+import Calendar from './pages/Calendar'
 import JoinEvent from './pages/JoinEvent'
 import MyEvent from './pages/MyEvent'
 import Network from './pages/Network'
@@ -44,6 +45,7 @@ export default function App() {
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/people/:id" element={<Profile />} />
                 <Route path="/events/:id" element={<MyEvent />} />
+                <Route path="/calendar" element={<Calendar />} />
                 <Route path="/quiz" element={<Quiz />} />
               </Route>
             </Route>

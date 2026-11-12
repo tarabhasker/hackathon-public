@@ -1,4 +1,5 @@
 import { useId, useState } from 'react'
+import { api } from '../../api'
 import mascot from '../../assets/kopicode-mascot.png'
 import { firstName } from '../../lib/network'
 import { coffeeChatUrl, nextWeekdaySlot, toLocalInput } from '../../lib/coffeeChat'
@@ -40,6 +41,20 @@ export default function CoffeeChatInvite({
     if (!valid) return
     const url = coffeeChatUrl({ sender, recipient, start, durationMinutes: duration, eventName, location })
     window.open(url, '_blank', 'noopener,noreferrer')
+    // record it so the Calendar page knows about this chat; the Google invite
+    // is already open, so a failure here shouldn't interrupt anyone
+    if (recipient.id != null) {
+      api('/api/coffee-chats', {
+        method: 'POST',
+        body: {
+          person_id: recipient.id,
+          starts_at: start.toISOString(),
+          duration_minutes: duration,
+          location: location || null,
+          event_name: eventName || null,
+        },
+      }).catch(() => {})
+    }
     setSentTo(recipientKey)
     onInvite?.(url)
   }

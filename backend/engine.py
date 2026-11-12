@@ -121,6 +121,15 @@ def search(conn, query: str, requester_id: int, limit: int = 5) -> list[dict]:
             hit["relevance"] = max(hit["relevance"], 0.99)
             hit["matched"] = ["name"] + [m for m in hit.get("matched", []) if m != "name"]
 
+    # Looks like a name search? Then don't pad the results with loose expertise
+    # matches — embedding similarity to a person's name is noise, and "ethan"
+    # should return Ethan, not four strangers at ~50% relevance.
+    if any("name" in (c.get("matched") or []) for c in candidates):
+        candidates = [
+            c for c in candidates
+            if "name" in (c.get("matched") or []) or c["relevance"] >= 0.55
+        ]
+
     if not candidates:
         return []
 

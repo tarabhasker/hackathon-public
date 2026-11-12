@@ -42,10 +42,17 @@ ALLOWED_ORIGINS = [
     "http://localhost:3001",
 ]
 
+# Demo fallback so every teammate's local DB gets the same admin account out of
+# the box. Set ADMIN_EMAIL/ADMIN_PASSWORD to override — and always in any real
+# deployment; these defaults are for local hackathon demos only.
+DEMO_ADMIN_EMAIL = "admin@demo.local"
+DEMO_ADMIN_PASSWORD = "letmein-admin"
+
+
 def ensure_admin() -> None:
     """Create (or promote) the admin account named by ADMIN_EMAIL/ADMIN_PASSWORD."""
-    email = os.environ.get("ADMIN_EMAIL", "").strip().lower()
-    password = os.environ.get("ADMIN_PASSWORD", "")
+    email = (os.environ.get("ADMIN_EMAIL") or DEMO_ADMIN_EMAIL).strip().lower()
+    password = os.environ.get("ADMIN_PASSWORD") or DEMO_ADMIN_PASSWORD
     if not email or not password:
         return
     with engine.begin() as conn:
@@ -67,6 +74,8 @@ def ensure_admin() -> None:
                 {"id": existing.id},
             )
             print(f"Admin flag granted to existing account: {email}", flush=True)
+    if not os.environ.get("ADMIN_EMAIL"):
+        print(f"Demo admin login: {DEMO_ADMIN_EMAIL} / {DEMO_ADMIN_PASSWORD}", flush=True)
 
 
 from contextlib import asynccontextmanager  # noqa: E402

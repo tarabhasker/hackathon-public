@@ -333,7 +333,7 @@ export default function AdminEvent() {
             <>
               <div className="ev-toolbar">
                 <span className="ev-ties">
-                  <b>{historyTies}</b> know each other · <b>{aiTies}</b> AI matches · <b>{teams.length}</b> teams
+                  <b>{historyTies}</b> connections · <b>{aiTies}</b> suggested · <b>{teams.length}</b> teams
                 </span>
                 {teams.length > 1 && (
                   <div className="ev-teamchips">
@@ -358,9 +358,9 @@ export default function AdminEvent() {
         <Card className="ev-intros">
           <div className="ev-intros__head">
             <div>
-              <Eyebrow>Who should meet</Eyebrow>
+              <Eyebrow>Suggested introductions</Eyebrow>
               <span className="ev-intros__sub">
-                The strongest expertise matches in the room who don't know each other yet.
+                Strong expertise matches in the room who aren't connected yet.
               </span>
             </div>
           </div>

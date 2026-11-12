@@ -649,7 +649,7 @@
 /* Joining spinner on the QR landing page */
 .join-wait { display: grid; place-items: center; padding: 12px 0 4px; color: var(--primary); }
 
-/* --- Admin: overview charts ------------------------------------------------------- */
+/* --- Admin: overview charts (v3) --------------------------------------------------- */
 .admin-viz {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -657,28 +657,47 @@
   margin-top: 12px;
 }
 .admin-viz__wide { grid-column: 1 / -1; }
-.viz-card { padding: 18px 20px 14px; }
+.viz-card { padding: 18px 20px 16px; }
 @media (max-width: 820px) { .admin-viz { grid-template-columns: 1fr; } }
 
 .viz { margin: 0; }
-.viz__title { font-size: 13px; font-weight: 600; color: var(--secondary); margin-bottom: 10px; }
-.viz__plot { position: relative; }
-.viz__svg { display: block; width: 100%; height: auto; outline: none; }
-.viz__svg:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; border-radius: 4px; }
 
-.viz-grid { stroke: var(--ds-line); stroke-width: 1; }
-.viz-tick { font-size: 10.5px; fill: var(--secondary-muted); font-family: var(--ds-font); }
-.viz-line { fill: none; stroke: var(--primary); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.viz-area { fill: var(--primary); fill-opacity: 0.1; }
-.viz-dot { fill: var(--primary); stroke: var(--ds-surface); stroke-width: 2; }
-.viz-endlabel { font-size: 12px; font-weight: 600; fill: var(--secondary); font-family: var(--ds-font); }
-.viz-crosshair { stroke: var(--ds-line-strong); stroke-width: 1; }
-
-.viz-tip {
-  position: absolute;
-  top: 2px;
-  transform: translateX(calc(-50% - (var(--flip, 0) * 40%)));
+/* Card header: title + context on the left, headline figure on the right */
+.viz-head {
   display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.viz-head__text { display: grid; gap: 2px; }
+.viz-head__title { font-size: 13px; font-weight: 600; color: var(--secondary); }
+.viz-head__sub { font-size: 11.5px; color: var(--secondary-muted); }
+.viz-head__figure { display: flex; align-items: baseline; gap: 8px; }
+.viz-head__figure strong {
+  font-size: 24px;
+  font-weight: 640;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--secondary);
+}
+.viz-head__unit { font-size: 11.5px; color: var(--secondary-muted); }
+
+/* Week-over-week movement pill */
+.viz-delta {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: var(--ds-radius-pill);
+  white-space: nowrap;
+}
+.viz-delta--up { background: var(--ds-ok-soft); color: var(--ds-ok-soft-ink); }
+.viz-delta--down { background: var(--ds-danger-soft); color: var(--ds-danger-soft-ink); }
+.viz-delta--flat { background: var(--secondary-soft); color: var(--secondary-muted); }
+
+/* Dark pill tooltip, matching the app's snackbars. Values lead, labels follow. */
+.viz-tip {
+  display: inline-flex;
   align-items: baseline;
   gap: 7px;
   padding: 5px 10px;
@@ -693,8 +712,9 @@
 }
 .viz-tip strong { font-size: 13.5px; }
 .viz-tip span { opacity: 0.75; }
+.viz-tip em { font-style: normal; font-size: 11px; opacity: 0.55; }
 
-/* bar list */
+/* Horizontal team bars: one measure, one hue; hover lifts a row and dims the rest */
 .viz-bars { display: flex; flex-direction: column; gap: 9px; }
 .viz-bar {
   position: relative;
@@ -705,7 +725,14 @@
   min-height: 24px; /* hit target taller than the mark */
   border-radius: var(--ds-radius-sm);
   outline: none;
+  animation: bar-in 0.45s ease backwards;
+  animation-delay: calc(var(--i, 0) * 50ms);
+  transition: opacity 0.18s ease;
 }
+@keyframes bar-in {
+  from { opacity: 0; transform: translateX(-6px); }
+}
+.viz-bars--dim .viz-bar:not(.viz-bar--hot) { opacity: 0.42; }
 .viz-bar:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .viz-bar__label {
   font-size: 12.5px;
@@ -718,29 +745,35 @@
 .viz-bar__fill {
   position: absolute;
   inset: 0 auto 0 0;
-  background: var(--primary);
   border-radius: 0 4px 4px 0; /* rounded data-end, square at the baseline */
   min-width: 2px;
   transition: filter 0.15s ease, width 0.5s ease;
 }
-.viz-bar--hot .viz-bar__fill { filter: brightness(1.18); }
-.viz-bar__value { font-size: 12.5px; font-weight: 600; color: var(--secondary); text-align: right; font-variant-numeric: tabular-nums; }
-.viz-tip--bar { top: auto; bottom: calc(100% + 2px); left: 50%; --flip: 0; }
-
-@media (prefers-reduced-motion: reduce) { .viz-bar__fill { transition: none; } }
-
-/* --- Admin charts v2 (recharts + segmented bar) ------------------------------------ */
-.viz-tip--float {
-  position: static;
-  transform: none;
+.viz-bar--hot .viz-bar__fill { filter: brightness(0.86); }
+.viz-bar--hot .viz-bar__label,
+.viz-bar--hot .viz-bar__value { color: var(--secondary); }
+.viz-bar__value {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--secondary);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.viz-tip--bar {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
 }
 
-/* one whole split into parts: 28px tall, 2px surface gaps, share printed inside */
+/* One whole split into parts: 28px tall, 2px surface gaps, share printed inside.
+   Hovering a segment or its legend row highlights both. */
 .viz-split {
+  position: relative;
   display: flex;
   gap: 2px;
   height: 28px;
-  margin: 6px 0 12px;
+  margin: 2px 0 12px;
 }
 .viz-split__part {
   position: relative;
@@ -751,8 +784,12 @@
   overflow: hidden;
   transform-origin: left;
   animation: split-in 0.5s ease both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+  transition: opacity 0.18s ease, filter 0.15s ease;
   outline: none;
 }
+.viz-split--dim .viz-split__part:not(.viz-split__part--hot) { opacity: 0.38; }
+.viz-split__part--hot { filter: brightness(0.9); }
 .viz-split__part:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .viz-split__part em {
   font-style: normal;
@@ -763,6 +800,11 @@
   white-space: nowrap;
 }
 @keyframes split-in { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.viz-tip--split {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%);
+}
 
 .viz-legend {
   list-style: none;
@@ -772,11 +814,23 @@
   flex-wrap: wrap;
   gap: 6px 16px;
 }
-.viz-legend li { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--secondary-muted); }
+.viz-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--secondary-muted);
+  transition: opacity 0.18s ease;
+  cursor: default;
+}
+.viz-legend__item--dim { opacity: 0.38; }
 .viz-legend i { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
 .viz-legend b { font-weight: 600; color: var(--secondary); font-variant-numeric: tabular-nums; }
 
-@media (prefers-reduced-motion: reduce) { .viz-split__part { animation: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .viz-bar, .viz-split__part { animation: none; }
+  .viz-bar__fill { transition: none; }
+}
 
 /* --- Event cards v2 ------------------------------------------------------------------ */
 .admin-event__row {

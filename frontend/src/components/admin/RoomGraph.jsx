@@ -237,7 +237,7 @@ export default function RoomGraph({ nodes, edges, focusTeam = null }) {
                 <span className="nw-node__tip-row">
                   {node.has_profile
                     ? [node.title, node.org_unit].filter(Boolean).join(' · ') || 'Profile set up'
-                    : "Hasn't finished setup yet"}
+                    : 'Profile pending'}
                 </span>
                 <span className="nw-node__tip-row">
                   {degree[node.id] || 0} connection{(degree[node.id] || 0) === 1 ? '' : 's'} in this room
@@ -249,9 +249,9 @@ export default function RoomGraph({ nodes, edges, focusTeam = null }) {
       </div>
 
       <ul className="rg-legend" aria-hidden="true">
-        <li><i className="rg-key rg-key--strong" />Knows them</li>
-        <li><i className="rg-key rg-key--sem" />Should meet (AI match)</li>
-        <li><i className="rg-key rg-key--ghost" />Setting up</li>
+        <li><i className="rg-key rg-key--strong" />Connected</li>
+        <li><i className="rg-key rg-key--sem" />Suggested connection</li>
+        <li><i className="rg-key rg-key--ghost" />Profile pending</li>
       </ul>
     </div>
   )

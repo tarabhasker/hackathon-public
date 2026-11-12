@@ -51,9 +51,10 @@ function forceLayout(nodes, edges) {
 
   const springs = edges
     .filter((e) => idx[e.a] !== undefined && idx[e.b] !== undefined)
-    .map((e) => [idx[e.a], idx[e.b], e.semantic ? 0.6 : Math.min(1, e.weight + 0.4)])
+    .map((e) => [idx[e.a], idx[e.b], e.semantic ? 0.5 : Math.min(1, e.weight + 0.4)])
 
-  const repulsion = 2000 * Math.max(1, 34 / n)
+  const rest = 170 // springs relax at a comfortable arm's length
+  const repulsion = 5200
   for (let step = 0; step < 260; step++) {
     const t = 1 - step / 260 // cooling
     const fx = new Array(n).fill(0)
@@ -72,34 +73,77 @@ function forceLayout(nodes, edges) {
         fx[j] -= dx * f
         fy[j] -= dy * f
       }
-      // stronger gravity than repulsion at the rim, so the shape stays a blob
-      fx[i] += (cx - xs[i]) * 0.028
-      fy[i] += (cy - ys[i]) * 0.028
+      // gentle gravity: just enough to keep stray components on canvas
+      fx[i] += (cx - xs[i]) * 0.008
+      fy[i] += (cy - ys[i]) * 0.008
     }
     for (const [i, j, k] of springs) {
       const dx = xs[j] - xs[i]
       const dy = ys[j] - ys[i]
       const d = Math.hypot(dx, dy) || 1
-      const pull = ((d - 95) / d) * 0.05 * k
+      const pull = ((d - rest) / d) * 0.04 * k
       fx[i] += dx * pull
       fy[i] += dy * pull
       fx[j] -= dx * pull
       fy[j] -= dy * pull
     }
     for (let i = 0; i < n; i++) {
-      xs[i] = Math.min(W - PAD, Math.max(PAD, xs[i] + fx[i] * t))
-      ys[i] = Math.min(H - PAD, Math.max(PAD, ys[i] + fy[i] * t))
+      xs[i] += fx[i] * t
+      ys[i] += fy[i] * t
     }
+  }
+
+  // normalise: spread the result to use the canvas, whatever n is
+  const minX = Math.min(...xs)
+  const maxX = Math.max(...xs)
+  const minY = Math.min(...ys)
+  const maxY = Math.max(...ys)
+  const sx = (W - 2 * PAD) / Math.max(1, maxX - minX)
+  const sy = (H - 2 * PAD) / Math.max(1, maxY - minY)
+  const s = Math.min(sx, sy, 3)
+  const ox = (W - (maxX - minX) * s) / 2
+  const oy = (H - (maxY - minY) * s) / 2
+  for (let i = 0; i < n; i++) {
+    xs[i] = ox + (xs[i] - minX) * s
+    ys[i] = oy + (ys[i] - minY) * s
+  }
+
+  // hard no-overlap pass: avatars plus labels need breathing room
+  const MIN_D = 78
+  for (let pass = 0; pass < 24; pass++) {
+    let moved = false
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const dx = xs[j] - xs[i]
+        const dy = ys[j] - ys[i]
+        const d = Math.hypot(dx, dy) || 0.01
+        if (d < MIN_D) {
+          const push = (MIN_D - d) / 2
+          const ux = dx / d
+          const uy = dy / d
+          xs[i] -= ux * push
+          ys[i] -= uy * push
+          xs[j] += ux * push
+          ys[j] += uy * push
+          moved = true
+        }
+      }
+    }
+    if (!moved) break
   }
 
   const pos = {}
   nodes.forEach((node) => {
-    pos[node.id] = { x: xs[idx[node.id]], y: ys[idx[node.id]] }
+    const i = idx[node.id]
+    pos[node.id] = {
+      x: Math.min(W - PAD, Math.max(PAD, xs[i])),
+      y: Math.min(H - PAD, Math.max(PAD, ys[i])),
+    }
   })
   return pos
 }
 
-export default function RoomGraph({ nodes, edges }) {
+export default function RoomGraph({ nodes, edges, focusTeam = null }) {
   const [hot, setHot] = useState(null)
   const positions = useMemo(() => forceLayout(nodes, edges), [nodes, edges])
 
@@ -112,6 +156,8 @@ export default function RoomGraph({ nodes, edges }) {
     return d
   }, [edges])
 
+  const teamOf = useMemo(() => Object.fromEntries(nodes.map((node) => [node.id, node.org_unit])), [nodes])
+  const inFocus = (id) => focusTeam === null || teamOf[id] === focusTeam
   const touches = (e, id) => e.a === id || e.b === id
 
   return (
@@ -128,7 +174,7 @@ export default function RoomGraph({ nodes, edges }) {
           const dx = to.x - from.x
           const dy = to.y - from.y
           const lit = hot !== null && touches(e, hot)
-          const dim = hot !== null && !lit
+          const dim = (hot !== null && !lit) || (hot === null && !(inFocus(e.a) || inFocus(e.b)))
           const kind = e.semantic ? 'rg-edge--sem' : e.weight >= 0.3 ? 'nw-edge--strong' : 'nw-edge--weak'
           return (
             <div
@@ -150,9 +196,10 @@ export default function RoomGraph({ nodes, edges }) {
           if (!at) return null
           const size = 36 + Math.min(18, (degree[node.id] || 0) * 2.5)
           const dim =
-            hot !== null &&
-            hot !== node.id &&
-            !edges.some((e) => touches(e, hot) && touches(e, node.id))
+            (hot !== null &&
+              hot !== node.id &&
+              !edges.some((e) => touches(e, hot) && touches(e, node.id))) ||
+            (hot === null && !inFocus(node.id))
           return (
             <button
               key={node.id}

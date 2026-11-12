@@ -558,12 +558,12 @@
 .ev-head__desc { margin: 6px 0 0; font-size: 13.5px; color: var(--secondary-muted); max-width: 560px; }
 .ev-head__actions { display: flex; gap: 8px; }
 
-.ev-grid { display: grid; grid-template-columns: 330px minmax(0, 1fr); gap: 16px; align-items: start; }
+.ev-grid { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; align-items: start; }
 .ev-grid > * { animation: adm-rise 0.55s ease both; }
 .ev-grid > *:nth-child(2) { animation-delay: 80ms; }
 @media (max-width: 960px) { .ev-grid { grid-template-columns: 1fr; } }
 
-.ev-qr { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+.ev-qr { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
 .ev-qr__code {
   align-self: center;
   padding: 16px;
@@ -867,4 +867,70 @@
 }
 .rg .rg-edge--sem {
   border-top: 2px dashed color-mix(in srgb, var(--primary) 72%, transparent);
+}
+
+/* --- Room page v2: QR settings, toolbar, intros -------------------------------------- */
+.ev-qr__settings summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--secondary-muted);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.ev-qr__settings summary::-webkit-details-marker { display: none; }
+.ev-qr__settings summary svg { transition: transform 0.15s ease; }
+.ev-qr__settings[open] summary svg { transform: rotate(90deg); }
+.ev-qr__settings summary:hover { color: var(--secondary); }
+.ev-qr__settings > *:not(summary) { margin-top: 10px; }
+.ev-qr__flag {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ds-warn);
+  margin-left: 2px;
+}
+
+.ev-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 2px 0 10px;
+}
+.ev-ties { font-size: 12.5px; color: var(--secondary-muted); white-space: nowrap; }
+.ev-ties b { color: var(--secondary); font-variant-numeric: tabular-nums; }
+.ev-teamchips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ev-teamchips .ui-chip { font-size: 12px; min-height: 26px; padding: 2px 11px; }
+
+.ev-intros { margin-top: 16px; padding: 18px 20px; animation: adm-rise 0.5s ease 80ms both; }
+.ev-intros__head { margin-bottom: 10px; }
+.ev-intros__sub { font-size: 12.5px; color: var(--secondary-muted); }
+.ev-intros__list { list-style: none; margin: 0; padding: 0; }
+.intro {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--ds-line);
+  animation: adm-rise 0.4s ease both;
+  animation-delay: var(--d, 0ms);
+}
+.intro:first-child { border-top: 0; }
+.intro__faces { display: inline-flex; flex: 0 0 auto; }
+.intro__faces .ui-avatar + .ui-avatar { margin-left: -9px; border: 2px solid var(--ds-surface); box-sizing: content-box; }
+.intro__who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.intro__who b { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.intro__who small { font-size: 12px; color: var(--secondary-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.intro__match {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--primary-soft-ink);
+  background: var(--primary-soft);
+  border-radius: var(--ds-radius-pill);
+  padding: 3px 9px;
+  flex: 0 0 auto;
 }

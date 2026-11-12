@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
 import RoomGraph from '../components/admin/RoomGraph'
 import { QrCode } from '../components/network/InvitePanel'
-import { Badge, Button, Card, Eyebrow, Icon, Notice, Spinner, TextField, useToast } from '../components/ui'
+import { Avatar, Badge, Button, Card, Chip, Eyebrow, Icon, Notice, Spinner, TextField, useToast } from '../components/ui'
 import { useCopied } from '../hooks/useCopied'
 import { useCountUp } from '../hooks/useCountUp'
 import { joinUrl } from '../lib/events'
@@ -58,7 +58,32 @@ export default function AdminEvent() {
   const [presenting, setPresenting] = useState(false)
   const [busy, setBusy] = useState(null)
   const [copied, copy] = useCopied()
+  const [focusTeam, setFocusTeam] = useState(null)
   const joinedCount = useCountUp(event?.members.length ?? 0)
+
+  const teams = graph ? [...new Set(graph.nodes.map((n) => n.org_unit).filter(Boolean))].sort() : []
+  const nodeById = graph ? Object.fromEntries(graph.nodes.map((n) => [n.id, n])) : {}
+  const aiPairs = graph
+    ? graph.edges.filter((e) => e.semantic).sort((x, y) => y.weight - x.weight).slice(0, 5)
+    : []
+  const historyTies = graph ? graph.edges.filter((e) => !e.semantic).length : 0
+  const aiTies = graph ? graph.edges.filter((e) => e.semantic).length : 0
+
+  async function copyIntro(pair) {
+    const a = nodeById[pair.a]
+    const b = nodeById[pair.b]
+    const first = (n) => n.name.split(' ')[0]
+    const text =
+      `Hi ${first(a)}, hi ${first(b)} — you two should meet at ${event.name}! ` +
+      `${a.name} (${a.title || 'profile pending'}) and ${b.name} (${b.title || 'profile pending'}) ` +
+      `have a ${Math.round(pair.weight * 100)}% expertise match. Go say hello 👋`
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success(`Intro for ${first(a)} & ${first(b)} copied — paste it anywhere.`)
+    } catch {
+      toast.error("Couldn't reach the clipboard — copy it from the room graph instead.")
+    }
+  }
   const seen = useRef(null) // user ids we've already shown, to announce newcomers
 
   const load = useCallback(async () => {
@@ -190,7 +215,7 @@ export default function AdminEvent() {
         <Card className="ev-qr">
           <Eyebrow>Scan to join</Eyebrow>
           <div className="ev-qr__code">
-            <QrCode value={url} size={232} label={`QR code to join ${event.name}`} />
+            <QrCode value={url} size={156} label={`QR code to join ${event.name}`} />
           </div>
           <Button variant="primary" block onClick={() => setPresenting(true)}>
             <Icon name="expand" size={16} /> Show full screen
@@ -203,19 +228,25 @@ export default function AdminEvent() {
             </Button>
           </div>
 
-          <TextField
-            label="Site address in the QR"
-            value={baseInput}
-            onChange={(e) => changeBase(e.target.value)}
-            placeholder={window.location.origin}
-            hint="Where people open the app. Leave blank to use this browser's address."
-          />
-          {localOnly && (
-            <Notice tone="warn">
-              Phones can't open {new URL(base).host}. Paste your deployed URL (or your laptop's network
-              address) above so the QR works on other devices.
-            </Notice>
-          )}
+          <details className="ev-qr__settings">
+            <summary>
+              <Icon name="chevron" size={13} /> QR settings
+              {localOnly && <i className="ev-qr__flag" title="Phones can't open this address" />}
+            </summary>
+            <TextField
+              label="Site address in the QR"
+              value={baseInput}
+              onChange={(e) => changeBase(e.target.value)}
+              placeholder={window.location.origin}
+              hint="Where people open the app. Leave blank to use this browser's address."
+            />
+            {localOnly && (
+              <Notice tone="warn">
+                Phones can't open {new URL(base).host}. Paste your deployed URL (or your laptop's network
+                address) above so the QR works on other devices.
+              </Notice>
+            )}
+          </details>
         </Card>
 
         <Card className="ev-people">
@@ -238,12 +269,63 @@ export default function AdminEvent() {
               <span>Nobody yet. Show the QR code — people appear here the moment they join.</span>
             </div>
           ) : graph ? (
-            <RoomGraph nodes={graph.nodes} edges={graph.edges} />
+            <>
+              <div className="ev-toolbar">
+                <span className="ev-ties">
+                  <b>{historyTies}</b> know each other · <b>{aiTies}</b> AI matches · <b>{teams.length}</b> teams
+                </span>
+                {teams.length > 1 && (
+                  <div className="ev-teamchips">
+                    <Chip selected={focusTeam === null} onClick={() => setFocusTeam(null)}>Everyone</Chip>
+                    {teams.map((t) => (
+                      <Chip key={t} selected={focusTeam === t} onClick={() => setFocusTeam((p) => (p === t ? null : t))}>
+                        {t}
+                      </Chip>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <RoomGraph nodes={graph.nodes} edges={graph.edges} focusTeam={focusTeam} />
+            </>
           ) : (
             <div className="ev-people__empty" role="status"><Spinner size={18} /> Drawing the room…</div>
           )}
         </Card>
       </div>
+
+      {aiPairs.length > 0 && (
+        <Card className="ev-intros">
+          <div className="ev-intros__head">
+            <div>
+              <Eyebrow>Who should meet</Eyebrow>
+              <span className="ev-intros__sub">
+                The strongest expertise matches in the room who don't know each other yet.
+              </span>
+            </div>
+          </div>
+          <ul className="ev-intros__list">
+            {aiPairs.map((p, i) => {
+              const a = nodeById[p.a]
+              const b = nodeById[p.b]
+              if (!a || !b) return null
+              return (
+                <li key={`${p.a}-${p.b}`} className="intro" style={{ '--d': `${i * 60}ms` }}>
+                  <span className="intro__faces">
+                    <Avatar name={a.name} size={30} tone="secondary" />
+                    <Avatar name={b.name} size={30} tone="primary-soft" />
+                  </span>
+                  <span className="intro__who">
+                    <b>{a.name} × {b.name}</b>
+                    <small>{[a.title, b.title].filter(Boolean).join(' ↔ ') || 'profiles pending'}</small>
+                  </span>
+                  <span className="intro__match">{Math.round(p.weight * 100)}%</span>
+                  <Button variant="outline" size="sm" onClick={() => copyIntro(p)}>Copy intro</Button>
+                </li>
+              )
+            })}
+          </ul>
+        </Card>
+      )}
 
       {presenting && <Present event={event} url={url} count={event.members.length} onClose={() => setPresenting(false)} />}
     </div>

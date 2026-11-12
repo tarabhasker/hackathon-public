@@ -403,12 +403,41 @@ def list_events(authorization: str | None = Header(default=None)):
         rows = conn.execute(
             text(
                 "SELECT e.id, e.code, e.name, e.description, e.is_open, e.created_at, "
-                "COUNT(m.id) AS member_count "
+                "COUNT(m.id) AS member_count, MAX(m.joined_at) AS last_joined_at "
                 "FROM events e LEFT JOIN event_members m ON m.event_id = e.id "
                 "GROUP BY e.id ORDER BY e.created_at DESC"
             )
         ).mappings().all()
-    return [dict(r) for r in rows]
+
+        # three most recent attendees per event, for the card's avatar stack
+        previews: dict[int, list[str]] = {}
+        for r in conn.execute(text(
+            "SELECT event_id, name FROM ("
+            "  SELECT m.event_id, COALESCE(p.name, split_part(u.email, '@', 1)) AS name, "
+            "  ROW_NUMBER() OVER (PARTITION BY m.event_id ORDER BY m.joined_at DESC) AS rn "
+            "  FROM event_members m JOIN users u ON u.id = m.user_id "
+            "  LEFT JOIN people p ON p.id = u.person_id"
+            ") t WHERE rn <= 3"
+        )):
+            previews.setdefault(r.event_id, []).append(r.name)
+
+        # joins per day for the last 7 days, for the card's sparkline
+        sparks: dict[int, list[int]] = {}
+        for r in conn.execute(text(
+            "SELECT event_id, (CURRENT_DATE - joined_at::date) AS days_ago, COUNT(*) AS n "
+            "FROM event_members WHERE joined_at >= CURRENT_DATE - 6 GROUP BY 1, 2"
+        )):
+            spark = sparks.setdefault(r.event_id, [0] * 7)
+            spark[6 - int(r.days_ago)] = int(r.n)
+
+    return [
+        {
+            **dict(r),
+            "members_preview": previews.get(r.id, []),
+            "spark": sparks.get(r.id, [0] * 7),
+        }
+        for r in rows
+    ]
 
 
 @app.get("/api/admin/events/{event_id}")

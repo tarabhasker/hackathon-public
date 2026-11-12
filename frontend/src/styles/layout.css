@@ -680,3 +680,81 @@
 .viz-tip--bar { top: auto; bottom: calc(100% + 2px); left: 50%; --flip: 0; }
 
 @media (prefers-reduced-motion: reduce) { .viz-bar__fill { transition: none; } }
+
+/* --- Admin charts v2 (recharts + segmented bar) ------------------------------------ */
+.viz-tip--float {
+  position: static;
+  transform: none;
+}
+
+/* one whole split into parts: 28px tall, 2px surface gaps, share printed inside */
+.viz-split {
+  display: flex;
+  gap: 2px;
+  height: 28px;
+  margin: 6px 0 12px;
+}
+.viz-split__part {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+  min-width: 3px;
+  overflow: hidden;
+  transform-origin: left;
+  animation: split-in 0.5s ease both;
+  outline: none;
+}
+.viz-split__part:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.viz-split__part em {
+  font-style: normal;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #fff;
+  padding-left: 8px;
+  white-space: nowrap;
+}
+@keyframes split-in { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+.viz-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+.viz-legend li { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--secondary-muted); }
+.viz-legend i { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
+.viz-legend b { font-weight: 600; color: var(--secondary); font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) { .viz-split__part { animation: none; } }
+
+/* --- Event cards v2 ------------------------------------------------------------------ */
+.admin-event__row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 6px;
+}
+.admin-event__joined { display: flex; align-items: baseline; gap: 6px; }
+.admin-event__count { font-size: 26px; font-weight: 640; letter-spacing: -0.02em; line-height: 1; }
+.admin-event__unit { font-size: 12px; color: var(--secondary-muted); }
+.spark { display: block; flex: 1; max-width: 150px; min-width: 70px; }
+.spark--flat {
+  height: 2px;
+  align-self: center;
+  margin-bottom: 10px;
+  border-radius: 1px;
+  background: var(--ds-line-strong);
+}
+.admin-event__faces { display: inline-flex; align-items: center; }
+.admin-event__faces .ui-avatar { margin-right: -7px; border: 2px solid var(--ds-surface); box-sizing: content-box; }
+.admin-event__more {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--secondary-muted);
+  margin-left: 13px;
+}

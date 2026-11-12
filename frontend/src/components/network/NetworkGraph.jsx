@@ -52,7 +52,7 @@ function Node({ node, index, at, role, onSelect }) {
           style={{
             width: size,
             height: size,
-            fontSize: role === 'you' ? 13 : node.depth === 1 ? 12 : 11,
+            fontSize: role === 'you' ? 14 : node.depth === 1 ? 13 : 12,
             background: role === 'other' ? `var(--avatar-${(index % AVATAR_FILLS) + 1})` : undefined,
             animationDuration: `${2.8 + (index % 4) * 0.4}s`,
             animationDelay: `${index * 0.23}s`,

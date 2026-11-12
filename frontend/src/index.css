@@ -21,7 +21,7 @@ body {
   background: var(--ds-bg);
   color: var(--secondary);
   font-family: var(--ds-font);
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.45;
   min-height: 100vh;
 }

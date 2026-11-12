@@ -4,10 +4,12 @@
 export const GRAPH_W = 760
 export const GRAPH_H = 640
 
-// Ring radii [x, y] per hop count. Hops 3–4 only appear when a search result
-// is further out, so they share a flattened outer ring.
-const RINGS = [[0, 0], [140, 140], [250, 250], [335, 292], [335, 292]]
-export const FLAT_RINGS = [RINGS[1][0], RINGS[2][0]] // hop rings drawn in both views
+// Ring radii [x, y] per hop count, one per degree of connection (up to 6).
+// Outer rings flatten vertically so they stay inside the canvas.
+const RINGS = [
+  [0, 0], [115, 115], [195, 195], [262, 240], [315, 272], [352, 294], [376, 306],
+]
+export const FLAT_RINGS = [RINGS[1][0], RINGS[2][0], RINGS[3][0]] // hop rings drawn in both views
 
 export function initials(name) {
   const parts = (name || '').trim().split(/\s+/).filter(Boolean)
@@ -60,8 +62,9 @@ export function layoutNodes(nodes) {
 // Direct connections sit evenly spaced on an inner shell; the people each of
 // them can introduce sit on an outer shell, clustered near their introducer.
 // Positions are fixed relative to each other - the view turns the whole sphere
-// as one - so people can never drift into one another.
-export const SHELLS = [0, 185, 310, 350]
+// as one - so people can never drift into one another. One shell per degree.
+export const SHELLS = [0, 160, 250, 310, 348, 372, 388]
+const MAX_SHELL = SHELLS.length - 1
 const DEG = Math.PI / 180
 const GOLDEN = 137.508 * DEG
 
@@ -122,22 +125,23 @@ export function sphereLayout(nodes) {
   })
 
   // Outer shells: each person leans away from the one who connects them
-  const byShell = { 1: planets, 2: [], 3: [] }
+  const byShell = { 1: planets }
+  for (let s = 2; s <= MAX_SHELL; s++) byShell[s] = []
   function addMoons(parent, depth) {
     const children = kids[parent.node.id] || []
     children.forEach((node, j) => {
-      const angle = (depth === 2 ? (children.length > 1 ? 34 : 20) : 16) * DEG
+      const angle = (depth === 2 ? (children.length > 1 ? 34 : 20) : depth === 3 ? 16 : 12) * DEG
       const around = (2 * Math.PI * j) / children.length + parent.node.id
       const item = { node, dir: lean(parent.dir, angle, around) }
-      byShell[Math.min(depth, 3)].push(item)
+      byShell[Math.min(depth, MAX_SHELL)].push(item)
       addMoons(item, depth + 1)
     })
   }
   planets.forEach((planet) => addMoons(planet, 2))
-  spreadApart(byShell[2], 31 * DEG)
-  spreadApart(byShell[3], 22 * DEG)
+  const MIN_GAPS = { 2: 31, 3: 22, 4: 17, 5: 14, 6: 12 } // degrees apart per shell
+  for (let s = 2; s <= MAX_SHELL; s++) spreadApart(byShell[s], (MIN_GAPS[s] || 12) * DEG)
 
-  for (const shell of [1, 2, 3]) {
+  for (let shell = 1; shell <= MAX_SHELL; shell++) {
     for (const { node, dir } of byShell[shell]) {
       const r = SHELLS[shell]
       points[node.id] = { x: dir.x * r, y: dir.y * r, z: dir.z * r }

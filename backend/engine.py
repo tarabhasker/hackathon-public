@@ -104,6 +104,23 @@ def relevance_candidates(conn, query: str, limit: int = 40) -> list[dict]:
 def search(conn, query: str, requester_id: int, limit: int = 5) -> list[dict]:
     candidates = relevance_candidates(conn, query)
     candidates = [c for c in candidates if c["person_id"] != requester_id]
+
+    # Direct name matches rank first: typing someone's name should always find
+    # them, even though the semantic index only covers expertise text.
+    by_id = {c["person_id"]: c for c in candidates}
+    for r in conn.execute(
+        text("SELECT id, name FROM people WHERE name ILIKE :q AND id != :me LIMIT 10"),
+        {"q": f"%{query.strip()}%", "me": requester_id},
+    ):
+        hit = by_id.get(r.id)
+        if hit is None:
+            candidates.append(
+                {"person_id": r.id, "relevance": 0.99, "snippet": r.name, "matched": ["name"]}
+            )
+        else:
+            hit["relevance"] = max(hit["relevance"], 0.99)
+            hit["matched"] = ["name"] + [m for m in hit.get("matched", []) if m != "name"]
+
     if not candidates:
         return []
 
@@ -194,53 +211,65 @@ def _edge_info(conn, a: int, b: int) -> dict:
 
 # --- Network view ---------------------------------------------------------------
 
-MAX_FIRST = 6       # closest direct ties shown around the requester
-MAX_SECOND = 7      # strongest 2-hop people shown on the outer ring
-MAX_PER_VIA = 3     # keep the outer ring spread across introducers
-WEAK_TIE = 0.3      # edges below this weight render as weak ties
-MAX_CROSS_LINKS = 5 # extra ties drawn between shown people, beyond the path tree
+MAX_FIRST = 6        # closest direct ties shown around the requester
+MAX_PER_DEPTH = 8    # strongest people shown on each ring beyond the first
+MAX_PER_VIA = 3      # keep each ring spread across introducers
+WEAK_TIE = 0.3       # edges below this weight render as weak ties
+MAX_CROSS_LINKS = 20 # extra ties drawn between shown people, beyond the path tree
+DEFAULT_DEGREES = 3  # how far out the view reaches unless the client asks otherwise
+MAX_DEGREES = 6
 
 
-def network(conn, requester_id: int, focus_id: int | None = None) -> dict:
-    """The requester's neighbourhood for the graph view.
+def network(
+    conn, requester_id: int, focus_id: int | None = None, degrees: int = DEFAULT_DEGREES
+) -> dict:
+    """The requester's neighbourhood out to `degrees` hops, for the graph view.
 
-    Nodes are the strongest 1- and 2-hop people (by strongest-path strength),
+    Nodes are the strongest people on each ring (by strongest-path strength),
     plus everyone on the strongest path to `focus_id` when given. Each node
     carries `via` (the previous person on its strongest path from the
     requester) so the client can light up the path.
     """
+    degrees = max(1, min(MAX_DEGREES, int(degrees)))
     G = load_graph(conn)
-    paths: dict[int, list[int]] = {requester_id: [requester_id]}
+    # all reachable paths (up to the hard cap), so a focus target further out
+    # than the chosen degree still gets its path drawn
+    all_paths: dict[int, list[int]] = {requester_id: [requester_id]}
     if requester_id in G:
         _, found = nx.single_source_dijkstra(G, requester_id, weight="cost")
-        paths = {n: p for n, p in found.items() if len(p) <= 5}  # same 4-hop cap as search
+        all_paths = {n: p for n, p in found.items() if len(p) <= MAX_DEGREES + 1}
+    paths = {n: p for n, p in all_paths.items() if len(p) <= degrees + 1}
 
     def strength(n):
-        p = paths[n]
+        p = all_paths[n]
         return math.prod(G.edges[u, v]["w"] for u, v in zip(p, p[1:]))
 
     ranked = sorted((n for n in paths if n != requester_id), key=lambda n: -strength(n))
-    first = [n for n in ranked if len(paths[n]) == 2][:MAX_FIRST]
-    chosen = {requester_id, *first}
+    chosen = {requester_id}
     per_via: dict[int, int] = {}
-    second = 0
-    for n in ranked:
-        if second >= MAX_SECOND:
-            break
-        p = paths[n]
-        if len(p) != 3 or p[1] not in chosen:
-            continue
-        if per_via.get(p[1], 0) >= MAX_PER_VIA:
-            continue
-        per_via[p[1]] = per_via.get(p[1], 0) + 1
-        chosen.add(n)
-        second += 1
+    # ring by ring: each depth keeps its strongest few, spread across introducers
+    for depth in range(1, degrees + 1):
+        cap = MAX_FIRST if depth == 1 else MAX_PER_DEPTH
+        picked = 0
+        for n in ranked:
+            if picked >= cap:
+                break
+            p = paths[n]
+            if len(p) - 1 != depth or n in chosen or p[-2] not in chosen:
+                continue
+            if depth > 1 and per_via.get(p[-2], 0) >= MAX_PER_VIA:
+                continue
+            per_via[p[-2]] = per_via.get(p[-2], 0) + 1
+            chosen.add(n)
+            picked += 1
 
     focus_reachable = None
     if focus_id is not None and focus_id != requester_id:
-        focus_reachable = focus_id in paths
+        focus_reachable = focus_id in all_paths
         if focus_reachable:
-            chosen.update(paths[focus_id])
+            chosen.update(all_paths[focus_id])
+            for n in all_paths[focus_id]:
+                paths.setdefault(n, all_paths[n])
 
     people = {
         r.id: r

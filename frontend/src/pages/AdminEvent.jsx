@@ -7,6 +7,7 @@ import { Avatar, Badge, Button, Card, Chip, Eyebrow, Icon, Spinner, TextField, u
 import { useCopied } from '../hooks/useCopied'
 import { useCountUp } from '../hooks/useCountUp'
 import { joinUrl } from '../lib/events'
+import { themeColor } from '../lib/theme'
 
 const POLL_MS = 5000
 
@@ -131,7 +132,7 @@ export default function AdminEvent() {
     if (!svg) return
     const xml = new XMLSerializer()
       .serializeToString(svg)
-      .replaceAll('var(--secondary)', '#1B1613')
+      .replaceAll('var(--secondary)', themeColor('--secondary', '#1E4542'))
     const img = new Image()
     img.onload = () => {
       const SIZE = 640
@@ -140,7 +141,7 @@ export default function AdminEvent() {
       canvas.width = SIZE
       canvas.height = SIZE
       const ctx = canvas.getContext('2d')
-      ctx.fillStyle = '#ffffff'
+      ctx.fillStyle = themeColor('--ds-surface', '#FFFFFF')
       ctx.fillRect(0, 0, SIZE, SIZE)
       ctx.drawImage(img, PAD, PAD, SIZE - 2 * PAD, SIZE - 2 * PAD)
       canvas.toBlob((blob) => {

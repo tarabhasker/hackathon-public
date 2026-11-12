@@ -143,7 +143,7 @@ function forceLayout(nodes, edges) {
   return pos
 }
 
-export default function RoomGraph({ nodes, edges, focusTeam = null }) {
+export default function RoomGraph({ nodes, edges, focusTeam = null, meId = null }) {
   const [hot, setHot] = useState(null)
   const positions = useMemo(() => forceLayout(nodes, edges), [nodes, edges])
 
@@ -204,7 +204,7 @@ export default function RoomGraph({ nodes, edges, focusTeam = null }) {
             <button
               key={node.id}
               type="button"
-              className={`nw-node nw-node--other ${node.has_profile ? '' : 'rg-node--ghost'} ${dim ? 'rg--dim' : ''}`}
+              className={`nw-node nw-node--other ${node.has_profile ? '' : 'rg-node--ghost'} ${node.id === meId ? 'rg-node--me' : ''} ${dim ? 'rg--dim' : ''}`}
               style={{
                 left: pct(at.x, W),
                 top: pct(at.y, H),
@@ -231,7 +231,7 @@ export default function RoomGraph({ nodes, edges, focusTeam = null }) {
                   {initials(node.name)}
                 </span>
               </span>
-              <span className="nw-node__label">{node.name.split(' ')[0]}</span>
+              <span className="nw-node__label">{node.id === meId ? 'You' : node.name.split(' ')[0]}</span>
               <span role="tooltip" className={`nw-node__tip ${at.y < H * 0.28 ? 'nw-node__tip--below' : ''}`}>
                 <span className="nw-node__tip-name">{node.name}</span>
                 <span className="nw-node__tip-row">

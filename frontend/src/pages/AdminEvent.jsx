@@ -1,19 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
+import RoomGraph from '../components/admin/RoomGraph'
 import { QrCode } from '../components/network/InvitePanel'
-import { Avatar, Badge, Button, Card, Eyebrow, Icon, Notice, Spinner, TextField, useToast } from '../components/ui'
+import { Badge, Button, Card, Eyebrow, Icon, Notice, Spinner, TextField, useToast } from '../components/ui'
 import { useCopied } from '../hooks/useCopied'
 import { useCountUp } from '../hooks/useCountUp'
 import { joinUrl } from '../lib/events'
-import { timeAgo } from '../lib/time'
 
 const BASE_KEY = 'bff.publicUrl'
 const POLL_MS = 5000
 
 const nameOf = (m) => m.name || m.email
-const detailOf = (m) =>
-  m.name ? [m.title, m.org_unit].filter(Boolean).join(' · ') || m.email : 'Profile not set up yet'
 
 function readBase() {
   try {
@@ -53,6 +51,7 @@ export default function AdminEvent() {
   const navigate = useNavigate()
   const toast = useToast()
   const [event, setEvent] = useState(null)
+  const [graph, setGraph] = useState(null)
   const [missing, setMissing] = useState(false)
   const [live, setLive] = useState(true)
   const [baseInput, setBaseInput] = useState(readBase)
@@ -64,7 +63,10 @@ export default function AdminEvent() {
 
   const load = useCallback(async () => {
     try {
-      const data = await api(`/api/admin/events/${id}`)
+      const [data, g] = await Promise.all([
+        api(`/api/admin/events/${id}`),
+        api(`/api/admin/events/${id}/graph`),
+      ])
       if (seen.current) {
         const fresh = data.members.filter((m) => !seen.current.has(m.user_id))
         if (fresh.length === 1) toast.info(`${nameOf(fresh[0])} just joined.`)
@@ -72,10 +74,11 @@ export default function AdminEvent() {
       }
       seen.current = new Set(data.members.map((m) => m.user_id))
       setEvent(data)
+      setGraph(g)
       setLive(true)
     } catch (err) {
       if (err.status === 404) setMissing(true)
-      else setLive(false) // keep showing the last list; the pill says we're reconnecting
+      else setLive(false) // keep showing the last graph; the pill says we're reconnecting
     }
   }, [id, toast])
 
@@ -234,19 +237,10 @@ export default function AdminEvent() {
               <Icon name="users" size={22} />
               <span>Nobody yet. Show the QR code — people appear here the moment they join.</span>
             </div>
+          ) : graph ? (
+            <RoomGraph nodes={graph.nodes} edges={graph.edges} />
           ) : (
-            <ul className="ev-people__list">
-              {event.members.map((m) => (
-                <li key={m.user_id} className="att" title={m.email}>
-                  <Avatar name={nameOf(m)} size={36} tone="secondary" />
-                  <div className="att__main">
-                    <span className="att__name">{nameOf(m)}</span>
-                    <span className="att__sub">{detailOf(m)}</span>
-                  </div>
-                  <span className="att__when">{timeAgo(m.joined_at)}</span>
-                </li>
-              ))}
-            </ul>
+            <div className="ev-people__empty" role="status"><Spinner size={18} /> Drawing the room…</div>
           )}
         </Card>
       </div>

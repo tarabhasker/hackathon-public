@@ -468,6 +468,56 @@ def get_event(event_id: int, authorization: str | None = Header(default=None)):
     return {**_event_payload(event), "members": [dict(m) for m in members]}
 
 
+@app.get("/api/admin/events/{event_id}/graph")
+def event_graph(event_id: int, authorization: str | None = Header(default=None)):
+    """Everyone in the room and the connections between them."""
+    _require_admin(authorization)
+    with engine.connect() as conn:
+        exists = conn.execute(text("SELECT 1 FROM events WHERE id = :id"), {"id": event_id}).first()
+        if exists is None:
+            raise HTTPException(status_code=404, detail="Event not found")
+
+        rows = conn.execute(text(
+            "SELECT u.id AS user_id, u.email, p.id AS person_id, p.name, p.title, p.org_unit "
+            "FROM event_members m JOIN users u ON u.id = m.user_id "
+            "LEFT JOIN people p ON p.id = u.person_id "
+            "WHERE m.event_id = :id ORDER BY m.joined_at"
+        ), {"id": event_id}).all()
+
+        nodes = []
+        person_ids = []
+        for r in rows:
+            if r.person_id is not None:
+                person_ids.append(r.person_id)
+                nodes.append({
+                    "id": r.person_id, "name": r.name, "title": r.title,
+                    "org_unit": r.org_unit, "has_profile": True,
+                })
+            else:
+                pretty = r.email.split("@")[0].replace(".", " ").title()
+                nodes.append({
+                    "id": -r.user_id, "name": pretty, "title": None,
+                    "org_unit": None, "has_profile": False,
+                })
+
+        # strongest tie per pair among the attendees
+        pairs: dict[tuple[int, int], dict] = {}
+        if person_ids:
+            for e in conn.execute(text(
+                "SELECT src, dst, type, weight, evidence FROM edges "
+                "WHERE src = ANY(:ids) AND dst = ANY(:ids)"
+            ), {"ids": person_ids}):
+                key = (min(e.src, e.dst), max(e.src, e.dst))
+                best = pairs.get(key)
+                if best is None or e.weight > best["weight"]:
+                    pairs[key] = {
+                        "a": key[0], "b": key[1], "weight": round(e.weight, 3),
+                        "type": e.type, "evidence": e.evidence,
+                    }
+
+    return {"nodes": nodes, "edges": list(pairs.values())}
+
+
 @app.post("/api/admin/events/{event_id}/toggle-open")
 def toggle_event_open(event_id: int, authorization: str | None = Header(default=None)):
     _require_admin(authorization)

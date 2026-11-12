@@ -1,7 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { API_BASE } from '../../api'
 import { useAuth } from '../../hooks/useAuth'
-import { Avatar, Icon } from '../ui'
+import { Avatar, Icon, Logo } from '../ui'
 
 // Single source of truth for navigation: used by the sidebar and the mobile tab bar.
 const NAV = [
@@ -9,13 +9,8 @@ const NAV = [
   { to: '/quiz', label: 'Quiz', icon: 'spark' },
 ]
 
-function Brand() {
-  return (
-    <div className="brand">
-      <span className="brand__mark"><Icon name="network" size={16} strokeWidth={2} /></span>
-      <span className="brand__name">BFF</span>
-    </div>
-  )
+function Brand({ inverse = false }) {
+  return <Logo inverse={inverse} size={inverse ? 40 : 30} className="brand" />
 }
 
 function Sidebar() {

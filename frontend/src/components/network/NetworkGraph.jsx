@@ -164,6 +164,7 @@ export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, m
   const [fitRef, fit] = useFitScale()
 
   const canvasRef = useRef(null)
+  const labelsRef = useRef(null) // strength labels, on a layer above the people
   const stageRef = useRef(null)
   const elements = useRef({})
   const view = useRef({ morph: mode === '3d' ? 1 : 0, yaw: START_YAW, pitch: START_PITCH, hovering: false, hotId: null, dragging: false, moved: false })
@@ -190,6 +191,8 @@ export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, m
 
   useEffect(() => {
     const canvas = canvasRef.current
+    const labelCanvas = labelsRef.current
+    const labelCtx = labelCanvas.getContext('2d')
     const ctx = canvas.getContext('2d')
     const tokens = getComputedStyle(document.documentElement)
     const primary = tokens.getPropertyValue('--primary').trim() || '#367B70'
@@ -220,6 +223,8 @@ export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, m
         pixels = wanted
         canvas.width = Math.round(GRAPH_W * pixels)
         canvas.height = Math.round(GRAPH_H * pixels)
+        labelCanvas.width = canvas.width
+        labelCanvas.height = canvas.height
       }
       ctx.setTransform(pixels, 0, 0, pixels, 0, 0)
       ctx.clearRect(0, 0, GRAPH_W, GRAPH_H)
@@ -396,7 +401,7 @@ export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, m
         ctx.lineTo(b.x, b.y)
         ctx.stroke()
         if (touchesHot && link.weight != null) {
-          hotLabels.push({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, weight: link.weight })
+          hotLabels.push({ a, b, weight: link.weight })
         }
       }
       ctx.globalAlpha = 1
@@ -412,26 +417,83 @@ export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, m
       ctx.setLineDash([])
       ctx.lineDashOffset = 0
 
-      // Strength labels on the hovered person's ties
+      // Strength labels on the hovered person's ties. They are painted on
+      // their own layer above the people, and each one slides along its line
+      // to a spot that no bubble, name tag, hover card or other label covers.
+      labelCtx.setTransform(pixels, 0, 0, pixels, 0, 0)
+      labelCtx.clearRect(0, 0, GRAPH_W, GRAPH_H)
       if (hotLabels.length > 0) {
-        ctx.font = '600 11px "Inter", system-ui, sans-serif'
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'middle'
+        labelCtx.font = '600 11px "Inter", system-ui, sans-serif'
+        labelCtx.textAlign = 'center'
+        labelCtx.textBaseline = 'middle'
+        const hotAt = screen[hot]
+        // the hovered person's info card sits above them (below, near the top edge)
+        const card = hotAt && {
+          l: hotAt.x - 180 * hotAt.scale,
+          r: hotAt.x + 180 * hotAt.scale,
+          t: hotAt.y < GRAPH_H * 0.3 ? hotAt.y : hotAt.y - hotAt.r - 190 * hotAt.scale,
+          b: hotAt.y < GRAPH_H * 0.3 ? hotAt.y + hotAt.r + 190 * hotAt.scale : hotAt.y,
+        }
+        const placed = []
+        // how much clear space a label centred at (x, y) has; negative = covered
+        const clearance = (x, y, half) => {
+          let room = Infinity
+          for (const body of bodies) {
+            // a bubble (the hovered one swells, so give it extra), plus the
+            // name tag hanging under it
+            const radius = body === hotAt ? body.r * 1.3 : body.r
+            room = Math.min(room, Math.hypot(body.x - x, body.y - y) - radius - half)
+            room = Math.min(room, Math.max(Math.abs(body.x - x) - 44 * body.scale - half, Math.abs(body.y + body.r + 16 * body.scale - y) - 20))
+          }
+          for (const other of placed) room = Math.min(room, Math.max(Math.abs(other.x - x) - other.half - half, Math.abs(other.y - y) - 20))
+          if (card && x > card.l - half && x < card.r + half && y > card.t - 10 && y < card.b + 10) room = Math.min(room, -50)
+          return room
+        }
         for (const tag of hotLabels) {
           const text = `${Math.round(tag.weight * 100)}%`
-          const w = ctx.measureText(text).width + 12
-          ctx.globalAlpha = 0.96
-          ctx.fillStyle = surface
-          ctx.strokeStyle = primary
-          ctx.lineWidth = 1
-          ctx.beginPath()
-          ctx.roundRect(tag.x - w / 2, tag.y - 9, w, 18, 9)
-          ctx.fill()
-          ctx.stroke()
-          ctx.fillStyle = ink
-          ctx.fillText(text, tag.x, tag.y + 0.5)
+          const half = labelCtx.measureText(text).width / 2 + 6
+          // Candidate spots, best first: along the line near its middle; then
+          // just to either side of the line; then, for short lines with no
+          // room, just past the far person.
+          const dx = tag.b.x - tag.a.x
+          const dy = tag.b.y - tag.a.y
+          const len = Math.hypot(dx, dy) || 1
+          const nx = -dy / len
+          const ny = dx / len
+          const spots = []
+          for (const side of [0, 20, -20]) {
+            for (const t of [0.5, 0.42, 0.58, 0.34, 0.66, 0.26, 0.74, 0.18, 0.82]) {
+              spots.push({ x: tag.a.x + dx * t + nx * side, y: tag.a.y + dy * t + ny * side })
+            }
+          }
+          const far = hotAt && Math.hypot(tag.a.x - hotAt.x, tag.a.y - hotAt.y) > Math.hypot(tag.b.x - hotAt.x, tag.b.y - hotAt.y) ? tag.a : tag.b
+          const dir = far === tag.b ? 1 : -1
+          for (const gap of [10, 24]) {
+            const reach = far.r + half + gap
+            spots.push({ x: far.x + (dx / len) * dir * reach, y: far.y + (dy / len) * dir * reach })
+            spots.push({ x: far.x + nx * reach, y: far.y + ny * reach })
+            spots.push({ x: far.x - nx * reach, y: far.y - ny * reach })
+          }
+          let best = null
+          for (const spot of spots) {
+            if (spot.x < half || spot.x > GRAPH_W - half || spot.y < 10 || spot.y > GRAPH_H - 10) continue
+            const room = clearance(spot.x, spot.y, half)
+            if (!best || room > best.room) best = { ...spot, room }
+            if (room >= 4) break // first clear spot wins
+          }
+          if (!best) best = { ...spots[0], room: 0 }
+          placed.push({ x: best.x, y: best.y, half })
+          labelCtx.globalAlpha = 1
+          labelCtx.fillStyle = surface
+          labelCtx.strokeStyle = primary
+          labelCtx.lineWidth = 1
+          labelCtx.beginPath()
+          labelCtx.roundRect(best.x - half, best.y - 9, half * 2, 18, 9)
+          labelCtx.fill()
+          labelCtx.stroke()
+          labelCtx.fillStyle = ink
+          labelCtx.fillText(text, best.x, best.y + 0.5)
         }
-        ctx.globalAlpha = 1
       }
 
       // Bodies: move, scale and fade with depth; nearer ones stack on top;
@@ -524,6 +586,7 @@ export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, m
         style={{ width: GRAPH_W, height: GRAPH_H, transform: `translate(-50%, -50%) scale(${fit * zoom})` }}
       >
         <canvas ref={canvasRef} className="nw-graph__links" aria-hidden="true" />
+        <canvas ref={labelsRef} className="nw-graph__links nw-graph__labels" aria-hidden="true" />
         {nodes.map((node, index) => {
           if (!points[node.id]) return null
           const role =

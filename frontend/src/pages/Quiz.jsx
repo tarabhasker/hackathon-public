@@ -72,7 +72,10 @@ function Reveal({ name, entryNumber, onClose }) {
         )}
         <p className="reveal-kicker">The results are in, {name}…</p>
         <h3 className="reveal-house">
-          You are <span>GAY !!!</span>
+          You are 
+          <span>
+            {name == 'Chris' ? ' a wizard' : ' GAY!!!'}
+          </span>
         </h3>
         <button className="btn btn-gradient" onClick={onClose}>
           Sort another wizard

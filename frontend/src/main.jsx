@@ -13,6 +13,7 @@ import './styles/layout.css'
 import './styles/network.css'
 import './styles/profile.css'
 import './styles/coffee.css'
+import './styles/target.css'
 import './index.css'
 import App from './App.jsx'
 

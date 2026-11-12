@@ -1,9 +1,14 @@
 import { useEffect, useRef } from 'react'
+import { Link } from 'react-router-dom'
+import { targetLink } from '../../lib/target'
 import { Eyebrow, Icon } from '../ui'
 import PersonRow from './PersonRow'
 
 // Search box + result list. `rows` is [{person, hops}].
-export default function SearchPanel({ query, onQuery, rows, heading, searching, error, activeId, onPick, onConnect, connectingId, connectedIds }) {
+export default function SearchPanel({
+  query, onQuery, rows, heading, searching, error, activeId, onPick, onConnect, connectingId, connectedIds,
+  premium = false, targetsLocked = 0, webLookup = null,
+}) {
   const inputRef = useRef(null)
 
   // ⌘K / Ctrl+K jumps to the search box
@@ -30,7 +35,7 @@ export default function SearchPanel({ query, onQuery, rows, heading, searching, 
           type="text"
           value={query}
           onChange={(e) => onQuery(e.target.value)}
-          placeholder="Skills, topics, people…"
+          placeholder={premium ? 'Skills, people, or a target like “Intel MD”…' : 'Skills, topics, people…'}
           autoComplete="off"
         />
         <kbd>⌘K</kbd>
@@ -50,6 +55,23 @@ export default function SearchPanel({ query, onQuery, rows, heading, searching, 
             connected={connectedIds?.has(row.person.id)}
           />
         ))}
+        {!searching && targetsLocked > 0 && (
+          <Link to="/target" className="nw-target-hint">
+            <Icon name="target" size={16} />
+            <span>
+              <strong>★ Premium:</strong> {targetsLocked === 1 ? 'a decision-maker matches' : `${targetsLocked} decision-makers match`} this search. Find the Target shows your route to them.
+            </span>
+          </Link>
+        )}
+        {!searching && premium && webLookup && (
+          <Link to={targetLink(webLookup)} className="nw-target-hint">
+            <Icon name="search" size={16} />
+            <span>
+              Find <strong>{webLookup}</strong> on the web with Find the Target
+            </span>
+            <Icon name="chevron" size={14} />
+          </Link>
+        )}
         {rows.length === 0 && !searching && (
           <div className="nw-results__empty">
             {error || (query.trim() ? 'No one matches yet. Try a skill or team name.' : 'No suggestions yet.')}

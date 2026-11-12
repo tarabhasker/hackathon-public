@@ -726,3 +726,51 @@
 .introdlg__steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--secondary-muted); }
 .introdlg__steps .is-done { color: var(--ds-ok-soft-ink); }
 .introdlg__actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+
+/* --- Find the Target: route reveal and external targets ------------------- */
+/* On the route but not reached yet: plain planet, no ring or bold label */
+.nw-node--pending .nw-node__av {
+  --planet: var(--planet-2) !important;
+  color: var(--secondary) !important;
+  box-shadow: none !important;
+}
+.nw-node--pending .nw-node__label { color: var(--secondary-muted) !important; border-color: var(--ds-line) !important; font-weight: 400 !important; }
+.nw-node--pending .nw-node__pulse { display: none; }
+
+/* The light arrives: one bright ring pulse */
+@keyframes nw-arrive {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 70%, transparent); }
+  40% { transform: scale(1.25); }
+  100% { transform: scale(1); box-shadow: 0 0 0 18px color-mix(in srgb, var(--primary) 0%, transparent); }
+}
+.nw-node--arrive .nw-node__avwrap { animation: nw-arrive 0.7s ease-out 1; border-radius: 999px; }
+@media (prefers-reduced-motion: reduce) { .nw-node--arrive .nw-node__avwrap { animation: none; } }
+
+/* Someone found on the web, not in our network: a star marks the target */
+.nw-node--external .nw-node__label::before { content: '★ '; color: var(--primary); }
+.nw-node--external.nw-node--target .nw-node__av {
+  box-shadow: 0 0 0 3px var(--ds-surface), 0 0 0 6px var(--primary), 0 0 26px 4px color-mix(in srgb, var(--primary) 45%, transparent);
+}
+
+.nw-row--target { background: color-mix(in srgb, var(--primary-soft) 55%, transparent); }
+.nw-target-hint {
+  display: flex; gap: 10px; align-items: center;
+  margin-top: 6px; padding: 10px 12px;
+  border: 1px dashed var(--primary); border-radius: var(--ds-radius-sm);
+  color: var(--secondary); font-size: 13.5px; text-decoration: none;
+}
+.nw-target-hint:hover { background: var(--primary-soft); }
+.nw-target-hint > span { flex: 1; }
+/* the target's name sits above it, clear of the introducer labelled below */
+.nw-node--external .nw-node__label {
+  position: absolute;
+  bottom: 100%;
+  margin: 0 0 8px;
+  white-space: nowrap;
+  background: var(--primary);
+  color: var(--primary-ink) !important;
+  border-color: var(--primary) !important;
+}
+.nw-node--external .nw-node__label::before { color: var(--primary-ink); }
+.nw-node--external.nw-node--pending .nw-node__label { background: var(--ds-surface); color: var(--secondary-muted) !important; }
+.nw-node--external.nw-node--pending .nw-node__label::before { color: var(--primary); }

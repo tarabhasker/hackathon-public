@@ -313,11 +313,14 @@ def main():
         # wipe previous synthetic data; CV-uploaded real people (is_real) survive.
         # Synthetic attendee accounts hang off synthetic people, and demo events
         # are the ones with no host, so both go first.
+        # External targets (Find the Target) are web lookups users paid for, so
+        # they survive too; their edges are rebuilt below.
         conn.execute(text(
-            "DELETE FROM users WHERE person_id IN (SELECT id FROM people WHERE is_real = false)"
+            "DELETE FROM users WHERE person_id IN "
+            "(SELECT id FROM people WHERE is_real = false AND kind = 'staff')"
         ))
         conn.execute(text("DELETE FROM events WHERE host_user_id IS NULL"))
-        conn.execute(text("DELETE FROM people WHERE is_real = false"))
+        conn.execute(text("DELETE FROM people WHERE is_real = false AND kind = 'staff'"))
         conn.commit()
 
         id_map = {}
@@ -384,7 +387,7 @@ def main():
         # re-attach each real user to a few synthetic people. Otherwise the
         # logged-in user sits alone in the network view.
         real_ids = conn.execute(
-            text("SELECT id FROM people WHERE is_real = true ORDER BY id")
+            text("SELECT id FROM people WHERE is_real = true AND kind = 'staff' ORDER BY id")
         ).scalars().all()
         synthetic_ids = list(id_map.values())
         for rid in real_ids:
@@ -404,6 +407,18 @@ def main():
         conn.commit()
         if real_ids:
             print(f"Linked {len(real_ids)} real user(s) to synthetic people")
+
+        # Re-attach external targets to the new synthetic staff
+        from engine import PUBLIC_EDGE_FACTOR, build_edges_for_person
+
+        external_ids = conn.execute(
+            text("SELECT id FROM people WHERE kind = 'external' ORDER BY id")
+        ).scalars().all()
+        for xid in external_ids:
+            build_edges_for_person(conn, xid, weight_factor=PUBLIC_EDGE_FACTOR)
+        conn.commit()
+        if external_ids:
+            print(f"Rebuilt edges for {len(external_ids)} external target(s)")
 
         counts = conn.execute(text(
             "SELECT (SELECT COUNT(*) FROM people) AS people, "

@@ -3,9 +3,13 @@
 /* --- Brand ------------------------------------------------------------------ */
 .logo { display: inline-flex; align-items: center; gap: 9px; }
 .logo__mark { flex-shrink: 0; display: block; }
-.logo__left { fill: var(--secondary); }
-.logo__right { fill: var(--primary); }
-.logo__overlap { fill: var(--primary-soft); }
+.logo__a { fill: var(--logo-a); }
+.logo__b { fill: var(--logo-b); }
+.logo__c { fill: var(--logo-c); }
+.logo__ab { fill: var(--logo-ab); }
+.logo__ac { fill: var(--logo-ac); }
+.logo__bc { fill: var(--logo-bc); }
+.logo__abc { fill: var(--logo-abc); }
 .logo__word {
   font-family: var(--ds-font-display);
   font-size: 26px;
@@ -16,9 +20,7 @@
   color: var(--secondary);
   transform: translateY(-1px);
 }
-.logo--inverse .logo__left { fill: var(--secondary-ink); }
-.logo--inverse .logo__right { fill: var(--hero-mark, var(--hero-accent)); }
-.logo--inverse .logo__overlap { fill: color-mix(in srgb, var(--hero-mark, var(--hero-accent)) 45%, white); }
+/* On dark backgrounds the mark keeps exactly the same colours: no tile, no outline. */
 .logo--inverse .logo__word { color: var(--secondary-ink); }
 
 /* --- Shell ------------------------------------------------------------------ */
@@ -580,7 +582,7 @@
 .ev-qr__code {
   align-self: center;
   padding: 16px;
-  background: #fff;
+  background: var(--ds-surface);
   border: 1px solid var(--ds-line);
   border-radius: var(--ds-radius-lg);
   line-height: 0;
@@ -612,7 +614,7 @@
 .ev-live::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--ds-ok); animation: ev-pulse 1.8s ease-out infinite; }
 .ev-live--off { color: var(--ds-warn-soft-ink); }
 .ev-live--off::before { background: var(--ds-warn); animation: none; }
-@keyframes ev-pulse { 0% { box-shadow: 0 0 0 0 rgba(63, 122, 84, 0.45); } 70%, 100% { box-shadow: 0 0 0 7px rgba(63, 122, 84, 0); } }
+@keyframes ev-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ds-ok) 45%, transparent); } 70%, 100% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--ds-ok) 0%, transparent); } }
 @media (prefers-reduced-motion: reduce) { .ev-live::before { animation: none; } }
 
 .att { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--ds-line); animation: att-in 0.3s ease both; }
@@ -641,7 +643,7 @@
 .present__title { margin: 0; font-family: var(--ds-font-display); font-size: clamp(26px, 4vw, 44px); font-weight: 560; letter-spacing: -0.02em; text-align: center; }
 .present__qr {
   padding: 22px;
-  background: #fff;
+  background: var(--ds-surface);
   border: 1px solid var(--ds-line);
   border-radius: var(--ds-radius-lg);
   box-shadow: var(--ds-shadow-3);
@@ -712,14 +714,14 @@
 .viz-delta--down { background: var(--ds-danger-soft); color: var(--ds-danger-soft-ink); }
 .viz-delta--flat { background: var(--secondary-soft); color: var(--secondary-muted); }
 
-/* --- The hero panel: deep pine, drifting aurora, glowing mint line ------------------ */
+/* --- The hero panel: deep pine, drifting sage glow, glowing sage line --------------- */
 .viz-card--hero {
   position: relative;
   overflow: hidden;
   background:
-    radial-gradient(640px 300px at 86% -10%, rgba(53, 224, 194, 0.16), transparent 60%),
-    linear-gradient(135deg, #133C37 0%, #0E2B28 58%, #1E4542 100%);
-  border-color: rgba(53, 224, 194, 0.16);
+    radial-gradient(640px 300px at 86% -10%, color-mix(in srgb, var(--hero-mark) 22%, transparent), transparent 60%),
+    linear-gradient(135deg, color-mix(in srgb, var(--secondary) 85%, var(--primary)) 0%, color-mix(in srgb, var(--secondary) 80%, black) 58%, var(--secondary) 100%);
+  border-color: color-mix(in srgb, var(--hero-mark) 22%, transparent);
 }
 .viz-card--hero::before,
 .viz-card--hero::after {
@@ -735,28 +737,28 @@
 .viz-card--hero::before {
   top: -240px;
   right: -80px;
-  background: rgba(53, 224, 194, 0.22);
+  background: color-mix(in srgb, var(--hero-mark) 28%, transparent);
   animation: aurora-a 16s ease-in-out infinite alternate;
 }
 .viz-card--hero::after {
   bottom: -300px;
   left: -120px;
-  background: rgba(154, 181, 166, 0.14);
+  background: color-mix(in srgb, var(--hero-accent) 14%, transparent);
   animation: aurora-b 20s ease-in-out infinite alternate;
 }
 @keyframes aurora-a { to { transform: translate(-120px, 60px) scale(1.15); } }
 @keyframes aurora-b { to { transform: translate(140px, -40px) scale(1.1); } }
 .viz-card--hero > * { position: relative; z-index: 1; }
 
-.viz--hero .viz-head__title { color: #ECFDF5; }
-.viz--hero .viz-head__sub { color: rgba(236, 253, 245, 0.55); }
-.viz--hero .viz-head__figure strong { color: #FFFFFF; font-size: 30px; }
-.viz--hero .viz-delta--up { background: rgba(53, 224, 194, 0.16); color: #7FEBD3; }
-.viz--hero .viz-delta--down { background: rgba(240, 120, 100, 0.18); color: #F6B3A5; }
-.viz--hero .viz-delta--flat { background: rgba(236, 253, 245, 0.1); color: rgba(236, 253, 245, 0.6); }
+.viz--hero .viz-head__title { color: var(--hero-accent); }
+.viz--hero .viz-head__sub { color: color-mix(in srgb, var(--hero-accent) 65%, transparent); }
+.viz--hero .viz-head__figure strong { color: var(--secondary-ink); font-size: 30px; }
+.viz--hero .viz-delta--up { background: color-mix(in srgb, var(--hero-mark) 22%, transparent); color: var(--avatar-6); }
+.viz--hero .viz-delta--down { background: color-mix(in srgb, var(--ds-danger) 30%, transparent); color: var(--ds-danger-soft); }
+.viz--hero .viz-delta--flat { background: color-mix(in srgb, var(--hero-accent) 10%, transparent); color: color-mix(in srgb, var(--hero-accent) 65%, transparent); }
 
 /* the line itself glows */
-.viz--hero .recharts-area-curve { filter: drop-shadow(0 0 7px rgba(53, 224, 194, 0.55)); }
+.viz--hero .recharts-area-curve { filter: drop-shadow(0 0 7px color-mix(in srgb, var(--hero-mark) 60%, transparent)); }
 
 /* pulsing "live" endpoint */
 .viz-pulse__ring {
@@ -822,7 +824,7 @@
   position: relative;
   height: 15px;
   border-radius: 0 6px 6px 0;
-  background: rgba(14, 143, 117, 0.08);
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
 }
 .viz-bar__fill {
   position: absolute;
@@ -830,7 +832,7 @@
   border-radius: 0 6px 6px 0; /* rounded data-end, square at the baseline */
   min-width: 3px;
   overflow: hidden;
-  background: linear-gradient(90deg, #0B6E5B 0%, #0E8F75 55%, #23BA97 100%);
+  background: linear-gradient(90deg, var(--secondary) 0%, var(--primary) 55%, var(--logo-bc) 100%);
   transition: width 0.5s ease, box-shadow 0.2s ease;
 }
 .viz-bar__fill::after {
@@ -844,7 +846,7 @@
 }
 @keyframes bar-shine { to { transform: translateX(130%); } }
 .viz-bar--hot .viz-bar__fill {
-  box-shadow: 0 0 14px rgba(14, 143, 117, 0.45);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--primary) 45%, transparent);
 }
 .viz-bar--hot .viz-bar__fill::after { animation: bar-shine 0.9s ease both; }
 .viz-bar--hot .viz-bar__label { color: var(--secondary); font-weight: 600; }
@@ -873,7 +875,7 @@
 .viz-donut .donut-cell--dim { opacity: 0.3; }
 .viz-donut .donut-cell--hot {
   transform: scale(1.055);
-  filter: drop-shadow(0 5px 12px rgba(30, 69, 66, 0.3));
+  filter: drop-shadow(0 5px 12px color-mix(in srgb, var(--secondary) 30%, transparent));
 }
 .viz-donut__center {
   position: absolute;
@@ -1190,7 +1192,7 @@
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--ds-surface);
   transition: transform 0.2s ease;
 }
 .ui-switch--on { background: var(--ds-ok); }

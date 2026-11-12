@@ -8,6 +8,13 @@ const AVATAR_FILLS = 6
 // --- 3D camera ---------------------------------------------------------------
 const CAMERA = 1500 // distance from the sun; smaller = stronger perspective
 const VIEW_SCALE = 0.98 // shrinks the whole sphere so its wider spacing still fits the frame
+// The network is an ellipsoid, not a round globe: wide and flat, so everyone
+// travels round wide elliptical paths as it turns and it fills the wide frame.
+const STRETCH = { x: 1.18, y: 0.7, z: 1.18 }
+// The 3D floor grid: ring radii (the two shells plus guides) and spoke count
+const FLOOR_RINGS = [70, 128, SHELLS[1], 248, SHELLS[2], 372]
+const FLOOR_SPOKES = 16
+
 // The sphere holds still (no auto-spin) at a slight angle so the depth shows;
 // drag to turn it any way round.
 const START_YAW = 0.4
@@ -18,6 +25,16 @@ const MORPH = 2.2 // 2D <-> 3D transition speed (1 / seconds)
 const DRAG = 0.008 // radians per pixel dragged
 const CX = GRAPH_W / 2
 const CY = GRAPH_H / 2
+
+// A theme colour ("#RRGGBB") at the given opacity, as plain rgba() so every
+// browser's canvas accepts it in a gradient
+function withAlpha(colour, alpha) {
+  const a = Math.max(0, Math.min(1, alpha)).toFixed(3)
+  const hex = /^#([0-9a-f]{6})$/i.exec(colour.trim())
+  if (!hex) return `color-mix(in srgb, ${colour} ${Math.round(a * 100)}%, transparent)`
+  const n = parseInt(hex[1], 16)
+  return `rgba(${n >> 16}, ${(n >> 8) & 255}, ${n & 255}, ${a})`
+}
 
 // Rotate a point by the camera angles and project it onto the screen.
 function project(p, sinY, cosY, sinP, cosP) {
@@ -54,7 +71,7 @@ function Body({ node, index, role, tie, register, onSelect, onHover }) {
       <span className="nw-node__avwrap">
         {(role === 'you' || role === 'target') && <span aria-hidden="true" className="nw-node__pulse" />}
         <span
-          className="nw-node__av"
+          className={`nw-node__av ${node.avatar_url ? 'nw-node__av--photo' : ''}`}
           style={{
             width: size,
             height: size,
@@ -211,8 +228,10 @@ export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, m
       const cosY = Math.cos(v.yaw)
       const sinP = Math.sin(v.pitch)
       const cosP = Math.cos(v.pitch)
-      const look = (p) => project(p, sinY, cosY, sinP, cosP)
+      const look = (p) => project({ x: p.x * STRETCH.x, y: p.y * STRETCH.y, z: p.z * STRETCH.z }, sinY, cosY, sinP, cosP)
 
+      const hot = v.hotId
+      const hotId = hot
       // Where everybody is on screen right now
       const screen = {}
       const bodies = []
@@ -255,22 +274,71 @@ export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, m
         }
       }
 
-      // A faint equator on each shell so the sphere's shape is easy to read
-      ctx.lineWidth = 1
+      // 3D reference floor: a circular grid through the middle of the network
+      // (rings + spokes) that tilts with the view. It replaces the flat dot
+      // background in 3D; lines fade toward the back and the outer edge.
       ctx.strokeStyle = line
       if (depthMix > 0.01) {
         ctx.setLineDash([])
-        ctx.globalAlpha = 0.4 * depthMix
-        for (const radius of [SHELLS[1], SHELLS[2]]) {
-          ctx.beginPath()
-          for (let s = 0; s <= 64; s++) {
-            const t = (s / 64) * Math.PI * 2
+        const fadeAt = (p, edge) => Math.max(0.12, Math.min(1, 0.7 + (p.scale - 1) * 2.4)) * edge * depthMix
+        FLOOR_RINGS.forEach((radius, i) => {
+          const edge = 1 - (i / FLOOR_RINGS.length) * 0.55
+          ctx.lineWidth = radius === SHELLS[1] || radius === SHELLS[2] ? 1.8 : 1.1
+          let prev = look({ x: radius, y: 0, z: 0 })
+          for (let k = 1; k <= 72; k++) {
+            const t = (k / 72) * Math.PI * 2
             const p = look({ x: radius * Math.cos(t), y: 0, z: radius * Math.sin(t) })
-            if (s === 0) ctx.moveTo(p.x, p.y)
-            else ctx.lineTo(p.x, p.y)
+            ctx.globalAlpha = Math.min(1, 1.15 * fadeAt(p, edge))
+            ctx.beginPath()
+            ctx.moveTo(prev.x, prev.y)
+            ctx.lineTo(p.x, p.y)
+            ctx.stroke()
+            prev = p
           }
+        })
+        ctx.lineWidth = 1.1
+        const inner = FLOOR_RINGS[0]
+        const outer = FLOOR_RINGS[FLOOR_RINGS.length - 1]
+        for (let k = 0; k < FLOOR_SPOKES; k++) {
+          const t = (k / FLOOR_SPOKES) * Math.PI * 2
+          const from = look({ x: inner * Math.cos(t), y: 0, z: inner * Math.sin(t) })
+          const to = look({ x: outer * Math.cos(t), y: 0, z: outer * Math.sin(t) })
+          const grad = ctx.createLinearGradient(from.x, from.y, to.x, to.y)
+          grad.addColorStop(0, withAlpha(line, 0.95 * fadeAt(from, 1)))
+          grad.addColorStop(1, withAlpha(line, 0.95 * fadeAt(to, 0.35)))
+          ctx.globalAlpha = 1
+          ctx.strokeStyle = grad
+          ctx.beginPath()
+          ctx.moveTo(from.x, from.y)
+          ctx.lineTo(to.x, to.y)
           ctx.stroke()
         }
+
+        // A stem from each person to the floor, with a dot where it lands, so
+        // you can read how far above or below the middle they sit
+        ctx.strokeStyle = tieStrong
+        ctx.fillStyle = tieStrong
+        ctx.lineWidth = 1
+        ctx.setLineDash([2, 4])
+        for (const person of people) {
+          const point = at[person.id]
+          const top = screen[person.id]
+          if (!point || !top || person.depth === 0 || Math.abs(point.y) < 12) continue
+          const foot = look({ x: point.x, y: 0, z: point.z })
+          const a = fadeAt(foot, 1) * (hotId != null && hotId !== person.id ? 0.3 : 1)
+          ctx.globalAlpha = 0.45 * a
+          ctx.beginPath()
+          ctx.moveTo(top.x, top.y)
+          ctx.lineTo(foot.x, foot.y)
+          ctx.stroke()
+          ctx.globalAlpha = 0.6 * a
+          ctx.beginPath()
+          ctx.ellipse(foot.x, foot.y, 3.2 * foot.scale, 1.7 * foot.scale, 0, 0, Math.PI * 2)
+          ctx.fill()
+        }
+        ctx.setLineDash([])
+        ctx.strokeStyle = line
+        ctx.lineWidth = 1
       }
 
       // 2D: plain dashed hop rings round you
@@ -292,7 +360,6 @@ export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, m
       ctx.lineCap = 'round'
       const parentOf = {}
       for (const person of people) parentOf[person.id] = person.via
-      const hot = v.hotId
       for (const link of links) {
         const a = screen[link.a]
         const b = screen[link.b]
@@ -312,8 +379,16 @@ export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, m
         let alpha = (onTree ? 0.4 + w * 0.5 : 0.18 + w * 0.3) + (depth - 1) * 0.8
         alpha = Math.max(0.15, Math.min(0.95, alpha))
         if (hot != null) alpha = touchesHot ? 0.95 : alpha * 0.18
-        ctx.globalAlpha = alpha
-        ctx.strokeStyle = touchesHot ? primary : w < 0.3 ? tieWeak : tieStrong
+        // in 3D, ties that aren't part of anyone's route to you sit further
+        // back, and every line fades toward whichever end is further away
+        if (!onTree && !touchesHot) alpha *= 1 - 0.45 * depthMix
+        const colour = touchesHot ? primary : w < 0.3 ? tieWeak : tieStrong
+        const near = (p) => 1 - depthMix + depthMix * Math.max(0.3, Math.min(1, 0.72 + (p.scale - 1) * 2.6))
+        const grad = ctx.createLinearGradient(a.x, a.y, b.x, b.y)
+        grad.addColorStop(0, withAlpha(colour, alpha * (touchesHot ? 1 : near(a))))
+        grad.addColorStop(1, withAlpha(colour, alpha * (touchesHot ? 1 : near(b))))
+        ctx.globalAlpha = 1
+        ctx.strokeStyle = grad
         ctx.lineWidth = (touchesHot ? 2.8 : (1 + w * 2.4) * (onTree ? 1 : 0.75)) * depth
         ctx.setLineDash([])
         ctx.beginPath()

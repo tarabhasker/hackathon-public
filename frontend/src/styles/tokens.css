@@ -47,6 +47,29 @@
   --planet-5: #B5C7BB;           /* light sage */
   --planet-6: #C7BCA3;           /* deep stone */
 
+  /* Logo: three-way Venn. One colour per circle, one per overlap.
+     Mid-tones on purpose: the same mark sits on the white app, the green
+     sign-in panel and light or dark browser tabs, and every circle stays
+     visible on all of them (no pine or green, which vanish on one or other). */
+  --logo-a: #7FA08F;             /* deep sage (top) */
+  --logo-b: #A8997C;             /* deep stone (left) */
+  --logo-c: #9AB5A6;             /* sage (right) */
+  --logo-ab: #6B7462;            /* overlaps: darker blends of their two circles */
+  --logo-ac: #5E8676;
+  --logo-bc: #7E8778;
+  --logo-abc: #EDE4D9;           /* cream: where all three meet */
+
+  /* Charts (admin): categorical colours from the palette, alternating dark and
+     light so neighbouring slices stay distinguishable. Use in this order. */
+  --chart-1: #1E4542;            /* pine */
+  --chart-2: #A8997C;            /* deep stone */
+  --chart-3: #367B70;            /* green */
+  --chart-4: #C7BCA3;            /* sand */
+  --chart-5: #5E8676;            /* deep sage */
+  --chart-6: #6B5D44;            /* umber */
+  --chart-7: #9AB5A6;            /* sage */
+  --chart-8: #D9D2C0;            /* stone */
+
   /* Connection lines in the network view */
   --tie-strong: #5E8676;         /* deep sage, solid */
   --tie-weak: #A8997C;           /* deep stone, dashed */

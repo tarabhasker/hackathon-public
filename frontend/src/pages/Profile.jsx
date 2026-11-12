@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api, assetUrl } from '../api'
+import IntroDialog from '../components/network/IntroDialog'
 import PathSteps from '../components/network/PathSteps'
 import ProfileEditForm from '../components/profile/ProfileEditForm'
 import { Avatar, Button, Card, Icon, Notice, useToast } from '../components/ui'
 import { useAuth } from '../hooks/useAuth'
-import { useCopied } from '../hooks/useCopied'
-import { ctaLabel, draftMessage, ordinal } from '../lib/network'
+import { ctaLabel, ordinal } from '../lib/network'
 
 function Section({ title, icon, tone = 'surface', children }) {
   return (
@@ -53,7 +53,7 @@ export default function Profile() {
   const [profile, setProfile] = useState(null)
   const [error, setError] = useState(null)
   const [editing, setEditing] = useState(false)
-  const [copied, copy] = useCopied(2600)
+  const [introOpen, setIntroOpen] = useState(false)
 
   useEffect(() => {
     let live = true
@@ -93,6 +93,9 @@ export default function Profile() {
 
   return (
     <div className="pf-page">
+      {introOpen && (
+        <IntroDialog path={route.ids} byId={route.byId} target={profile} onClose={() => setIntroOpen(false)} />
+      )}
       <div className="pf">
         <Link to="/" className="pf-back"><Icon name="back" size={16} /> Network</Link>
 
@@ -111,6 +114,11 @@ export default function Profile() {
             <div className="pf-hero__text">
               <h1>{profile.name}</h1>
               {role && <span className="pf-hero__role">{role}</span>}
+              {profile.linkedin_url && (
+                <a className="pf-hero__linkedin" href={profile.linkedin_url} target="_blank" rel="noopener noreferrer">
+                  <Icon name="linkedin" size={15} /> LinkedIn profile
+                </a>
+              )}
             </div>
             <div className="pf-hero__actions">
               {profile.is_me ? (
@@ -120,8 +128,9 @@ export default function Profile() {
                   </Button>
                 )
               ) : (
-                <Button variant="primary" onClick={() => copy(draftMessage(route.ids, route.byId, profile, ''))}>
-                  {copied ? 'Draft copied — paste to send' : ctaLabel(route.ids, route.byId)}
+                <Button variant="primary" onClick={() => setIntroOpen(true)}>
+                  <Icon name="linkedin" size={16} />
+                  {ctaLabel(route.ids, route.byId)}
                 </Button>
               )}
             </div>

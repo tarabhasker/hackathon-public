@@ -1,9 +1,9 @@
 import { Link } from 'react-router-dom'
 import { assetUrl } from '../../api'
-import { Avatar, Button } from '../ui'
+import { Avatar, Button, Icon } from '../ui'
 
 // Floating summary of the selected person and how to reach them.
-export default function PathCard({ target, pathText, ctaLabel, ctaDone, onCta }) {
+export default function PathCard({ target, pathText, ctaLabel, onCta }) {
   return (
     <div className="nw-pathcard" key={target.id}>
       <Link to={`/people/${target.id}`} className="nw-pathcard__avatar" aria-label={`View ${target.name}'s profile`}>
@@ -17,7 +17,8 @@ export default function PathCard({ target, pathText, ctaLabel, ctaDone, onCta })
         <span className="nw-pathcard__path">{pathText}</span>
       </div>
       <Button variant="primary" onClick={onCta}>
-        {ctaDone ? 'Draft copied — paste to send' : ctaLabel}
+        <Icon name="linkedin" size={16} />
+        {ctaLabel}
       </Button>
     </div>
   )

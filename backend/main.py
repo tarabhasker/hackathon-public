@@ -131,6 +131,7 @@ class ProfileUpdate(BaseModel):
     skills: list[str] = []
     ask: str = ""
     offer: str = ""
+    linkedin_url: str = ""
 
 
 class EmployerIn(BaseModel):
@@ -881,7 +882,7 @@ def get_profile(person_id: int, authorization: str | None = Header(default=None)
     with engine.connect() as conn:
         person = conn.execute(
             text(
-                "SELECT id, name, title, org_unit, ask_me_about, avatar_key "
+                "SELECT id, name, title, org_unit, ask_me_about, avatar_key, linkedin_url "
                 "FROM people WHERE id = :id"
             ),
             {"id": person_id},
@@ -915,7 +916,7 @@ def get_profile(person_id: int, authorization: str | None = Header(default=None)
                 rows = {
                     r.id: r
                     for r in conn.execute(
-                        text("SELECT id, name, title, avatar_key FROM people WHERE id = ANY(:ids)"),
+                        text("SELECT id, name, title, avatar_key, linkedin_url FROM people WHERE id = ANY(:ids)"),
                         {"ids": ids},
                     )
                 }
@@ -927,6 +928,7 @@ def get_profile(person_id: int, authorization: str | None = Header(default=None)
                             "name": r.name,
                             "title": r.title,
                             "avatar_url": _avatar_url(r.avatar_key),
+                            "linkedin_url": r.linkedin_url,
                             "evidence": matching._edge_info(conn, prev, cur)["evidence"]
                             if prev is not None
                             else None,
@@ -943,10 +945,33 @@ def get_profile(person_id: int, authorization: str | None = Header(default=None)
         "ask": _real_text(facets.get("ask")),
         "offer": _real_text(facets.get("offer")),
         "avatar_url": _avatar_url(person.avatar_key),
+        "linkedin_url": person.linkedin_url,
         "is_me": person_id == me,
         "hops": max(len(path) - 1, 0),
         "path": path,
     }
+
+
+def _clean_linkedin(raw: str | None) -> str | None:
+    """Canonical https://www.linkedin.com/in/<handle> from a pasted link or
+    handle, None when blank. Only personal profile links are accepted, so the
+    stored value can never point anywhere but LinkedIn."""
+    import re
+
+    value = (raw or "").strip()
+    if not value:
+        return None
+    match = re.fullmatch(
+        r"(?:(?:https?://)?(?:[a-z]{2,3}\.)?linkedin\.com/in/)?@?([A-Za-z0-9\-_%]{3,100})/?(?:\?.*)?",
+        value,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        raise HTTPException(
+            status_code=400,
+            detail="That doesn't look like a LinkedIn profile link (linkedin.com/in/your-name)",
+        )
+    return f"https://www.linkedin.com/in/{match.group(1)}"
 
 
 @app.put("/api/profile")
@@ -961,14 +986,16 @@ def update_profile(body: ProfileUpdate, authorization: str | None = Header(defau
     title = body.title.strip()
     org_unit = body.org_unit.strip() or None
     skills = [s.strip() for s in body.skills if s.strip()][:30]
+    linkedin_url = _clean_linkedin(body.linkedin_url)
 
     with engine.begin() as conn:
         conn.execute(
             text(
-                "UPDATE people SET name = :n, title = :t, org_unit = :u, ask_me_about = :a "
-                "WHERE id = :id"
+                "UPDATE people SET name = :n, title = :t, org_unit = :u, ask_me_about = :a, "
+                "linkedin_url = :li WHERE id = :id"
             ),
-            {"n": name, "t": title, "u": org_unit, "a": ", ".join(skills)[:500], "id": me},
+            {"n": name, "t": title, "u": org_unit, "a": ", ".join(skills)[:500],
+             "li": linkedin_url, "id": me},
         )
         projects = conn.execute(
             text("SELECT DISTINCT project FROM project_memberships WHERE person_id = :id"),

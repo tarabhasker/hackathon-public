@@ -22,7 +22,7 @@
 .logo--inverse .logo__word { color: var(--secondary-ink); }
 
 /* --- Shell ------------------------------------------------------------------ */
-.shell { display: flex; min-height: 100vh; }
+.shell { display: flex; height: 100vh; overflow: hidden; } /* desktop: the app fills the window */
 
 .shell-nav {
   position: sticky;
@@ -83,11 +83,22 @@
   white-space: nowrap;
 }
 
-.shell-content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.shell-content { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
 
 .shell-tabs { display: none; }
 
+@media (max-width: 1180px) and (min-width: 821px) {
+  .shell-nav { width: 76px; padding: 24px 12px; align-items: center; }
+  .shell-nav .brand { padding: 0 0 24px; }
+  .shell-nav .logo__word,
+  .shell-nav__metext { display: none; }
+  .shell-nav__link { width: 48px; padding: 0; justify-content: center; font-size: 0; } /* icon only; text stays for screen readers */
+  .shell-nav__me { padding: 12px 0; justify-content: center; }
+}
+
 @media (max-width: 820px) {
+  .shell { height: auto; min-height: 100vh; overflow: visible; } /* phones scroll normally */
+  .shell-content { overflow: visible; }
   .shell-nav { display: none; }
   .shell-content { padding-bottom: 76px; }
   .shell-tabs {

@@ -19,12 +19,12 @@ function Sidebar() {
     <nav className="shell-nav" aria-label="Main">
       <Brand />
       {NAV.map((item) => (
-        <NavLink key={item.to} to={item.to} end={item.end} className="shell-nav__link">
+        <NavLink key={item.to} to={item.to} end={item.end} className="shell-nav__link" title={item.label}>
           <Icon name={item.icon} />
           {item.label}
         </NavLink>
       ))}
-      <a className="shell-nav__link" href={`${API_BASE}/docs`}>
+      <a className="shell-nav__link" href={`${API_BASE}/docs`} title="API docs">
         <Icon name="users" />
         API docs
       </a>
@@ -36,7 +36,7 @@ function Sidebar() {
           <span className="shell-nav__meemail">{user.email}</span>
         </span>
       </div>
-      <button type="button" className="shell-nav__link" onClick={signOut}>
+      <button type="button" className="shell-nav__link" onClick={signOut} title="Sign out">
         <Icon name="logout" />
         Sign out
       </button>

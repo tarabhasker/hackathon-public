@@ -281,9 +281,32 @@ def admin_overview(authorization: str | None = Header(default=None)):
             "(SELECT COUNT(*) FROM edges) AS edges, "
             "(SELECT COUNT(*) FROM facets WHERE embedding IS NOT NULL) AS embedded_facets, "
             "(SELECT COUNT(*) FROM facets) AS facets, "
-            "(SELECT COUNT(*) FROM quiz_entries) AS quiz_entries"
+            "(SELECT COUNT(*) FROM quiz_entries) AS quiz_entries, "
+            "(SELECT COUNT(*) FROM event_members) AS event_joins"
         )).mappings().one()
-    return dict(stats)
+
+        joins_by_day = conn.execute(text(
+            "SELECT to_char(d.day, 'YYYY-MM-DD') AS day, COUNT(m.id) AS count "
+            "FROM generate_series(CURRENT_DATE - 13, CURRENT_DATE, INTERVAL '1 day') AS d(day) "
+            "LEFT JOIN event_members m ON m.joined_at::date = d.day::date "
+            "GROUP BY d.day ORDER BY d.day"
+        )).mappings().all()
+
+        people_by_unit = conn.execute(text(
+            "SELECT COALESCE(org_unit, 'Unassigned') AS unit, COUNT(*) AS count "
+            "FROM people GROUP BY 1 ORDER BY 2 DESC LIMIT 8"
+        )).mappings().all()
+
+        edges_by_type = conn.execute(text(
+            "SELECT type, COUNT(*) AS count FROM edges GROUP BY 1 ORDER BY 2 DESC"
+        )).mappings().all()
+
+    return {
+        **stats,
+        "joins_by_day": [dict(r) for r in joins_by_day],
+        "people_by_unit": [dict(r) for r in people_by_unit],
+        "edges_by_type": [dict(r) for r in edges_by_type],
+    }
 
 
 @app.get("/api/admin/users")

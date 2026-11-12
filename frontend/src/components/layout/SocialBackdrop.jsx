@@ -23,11 +23,11 @@ export default function SocialBackdrop({ className = '' }) {
     let fills = []
     function readTokens() {
       const tokens = getComputedStyle(document.documentElement)
-      primary = tokens.getPropertyValue('--primary').trim() || '#9E3B33'
+      primary = tokens.getPropertyValue('--primary').trim() || '#367B70'
       primaryInk = tokens.getPropertyValue('--primary-ink').trim() || '#FFFFFF'
-      ink = tokens.getPropertyValue('--secondary').trim() || '#1B1613'
+      ink = tokens.getPropertyValue('--secondary').trim() || '#1E4542'
       font = tokens.getPropertyValue('--ds-font').trim() || 'sans-serif'
-      fills = [1, 2, 3, 4, 5, 6].map((i) => tokens.getPropertyValue(`--avatar-${i}`).trim() || '#EEEEEE')
+      fills = [1, 2, 3, 4, 5, 6].map((i) => tokens.getPropertyValue(`--avatar-${i}`).trim() || '#EDE4D9')
     }
     readTokens()
     const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches

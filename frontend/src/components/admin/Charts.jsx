@@ -13,18 +13,20 @@ import {
   YAxis,
 } from 'recharts'
 import { useCountUp } from '../../hooks/useCountUp'
+import { themeAlpha, themeColor } from '../../lib/theme'
 
-// Categorical palette anchored on the brand teal, validated with the dataviz
-// six-checks script (CVD-safe adjacent pairs, contrast >= 3:1 on white).
-// Hues are assigned in this fixed order, never cycled.
-export const CHART_COLORS = [
-  '#0E8F75', '#CC8226', '#3E6FB0', '#C25E4C', '#7A5FB5', '#6B7F23', '#C9568F', '#9A5F1E',
-]
-const ACCENT = CHART_COLORS[0]
-const MINT = '#35E0C2' // the hero line on the dark panel
-const HERO_INK = '#ECFDF5'
-const HERO_MUTED = 'rgba(236, 253, 245, 0.55)'
-const HERO_GRID = 'rgba(236, 253, 245, 0.09)'
+// All chart colours come from the theme (--chart-1..8 in styles/tokens.css),
+// so the admin pages use the same palette as the rest of the app.
+// Categorical hues are assigned in this fixed order, never cycled.
+const FALLBACK = ['#1E4542', '#A8997C', '#367B70', '#C7BCA3', '#5E8676', '#6B5D44', '#9AB5A6', '#D9D2C0']
+export const CHART_COLORS = FALLBACK.map((c, i) => themeColor(`--chart-${i + 1}`, c))
+// the hero panel: a sage line on deep pine, with cream text
+const MINT = themeColor('--hero-mark', '#9AB5A6')
+const HERO_EDGE = themeColor('--secondary', '#1E4542')
+const HERO_INK = themeColor('--hero-accent', '#EDE4D9')
+const HERO_MUTED = themeAlpha('--hero-accent', 0.6, '#EDE4D9')
+const HERO_GRID = themeAlpha('--hero-accent', 0.1, '#EDE4D9')
+const HERO_CURSOR = themeAlpha('--hero-accent', 0.3, '#EDE4D9')
 
 const fmt = (n) => Number(n).toLocaleString()
 const dayLabel = (iso) =>
@@ -79,7 +81,7 @@ function PulseDot({ cx, cy }) {
   return (
     <g className="viz-pulse">
       <circle className="viz-pulse__ring" cx={cx} cy={cy} r={9} fill={MINT} />
-      <circle cx={cx} cy={cy} r={4} fill={MINT} stroke="#0E2B28" strokeWidth={2} />
+      <circle cx={cx} cy={cy} r={4} fill={MINT} stroke={HERO_EDGE} strokeWidth={2} />
     </g>
   )
 }
@@ -136,7 +138,7 @@ export function JoinsArea({ data }) {
                 detail={(v) => (total > 0 ? `${Math.round((v / total) * 100)}% of all joins` : null)}
               />
             }
-            cursor={{ stroke: 'rgba(236, 253, 245, 0.3)', strokeWidth: 1 }}
+            cursor={{ stroke: HERO_CURSOR, strokeWidth: 1 }}
             isAnimationActive={false}
           />
           <Area
@@ -147,7 +149,7 @@ export function JoinsArea({ data }) {
             strokeWidth={2.5}
             fill="url(#joinsFill)"
             dot={false}
-            activeDot={{ r: 5.5, strokeWidth: 2, stroke: '#0E2B28', fill: MINT }}
+            activeDot={{ r: 5.5, strokeWidth: 2, stroke: HERO_EDGE, fill: MINT }}
             animationDuration={1100}
           />
           {!flat && peak.count > 0 && peak.day !== last?.day && (
@@ -156,7 +158,7 @@ export function JoinsArea({ data }) {
               y={peak.count}
               r={4}
               fill={MINT}
-              stroke="#0E2B28"
+              stroke={HERO_EDGE}
               strokeWidth={2}
               isFront
               label={{

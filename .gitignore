@@ -27,3 +27,6 @@ dist/
 # python cache
 __pycache__/
 .neon
+
+# Render environment values (generated locally, pasted into Render)
+.env.render

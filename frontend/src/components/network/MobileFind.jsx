@@ -21,6 +21,10 @@ export default function MobileFind({
   ctaDone,
   onCta,
   onPick,
+  onConnect,
+  connectingId,
+  connectedIds,
+  children,
 }) {
   const [showMore, setShowMore] = useState(false)
   const me = useAuth().user.person
@@ -103,12 +107,22 @@ export default function MobileFind({
             {showMore && (
               <Card className="mf-morelist">
                 {others.map((r) => (
-                  <PersonRow key={r.person.id} person={r.person} hops={r.hops} onPick={onPick} />
+                  <PersonRow
+                    key={r.person.id}
+                    person={r.person}
+                    hops={r.hops}
+                    onPick={onPick}
+                    onConnect={onConnect}
+                    connecting={connectingId === r.person.id}
+                    connected={connectedIds?.has(r.person.id)}
+                  />
                 ))}
               </Card>
             )}
           </>
         )}
+
+        {children}
       </div>
     </div>
   )

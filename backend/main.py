@@ -497,86 +497,88 @@ def get_event(event_id: int, authorization: str | None = Header(default=None)):
     return {**_event_payload(event), "members": [dict(m) for m in members]}
 
 
+def _room_graph(conn, event_id: int) -> dict:
+    """Everyone in the room and the connections between them."""
+    rows = conn.execute(text(
+        "SELECT u.id AS user_id, u.email, p.id AS person_id, p.name, p.title, p.org_unit "
+        "FROM event_members m JOIN users u ON u.id = m.user_id "
+        "LEFT JOIN people p ON p.id = u.person_id "
+        "WHERE m.event_id = :id ORDER BY m.joined_at"
+    ), {"id": event_id}).all()
+
+    nodes = []
+    person_ids = []
+    for r in rows:
+        if r.person_id is not None:
+            person_ids.append(r.person_id)
+            nodes.append({
+                "id": r.person_id, "name": r.name, "title": r.title,
+                "org_unit": r.org_unit, "has_profile": True,
+            })
+        else:
+            pretty = r.email.split("@")[0].replace(".", " ").title()
+            nodes.append({
+                "id": -r.user_id, "name": pretty, "title": None,
+                "org_unit": None, "has_profile": False,
+            })
+
+    # strongest stored tie per pair among the attendees
+    pairs: dict[tuple[int, int], dict] = {}
+    if person_ids:
+        for e in conn.execute(text(
+            "SELECT src, dst, type, weight, evidence FROM edges "
+            "WHERE src = ANY(:ids) AND dst = ANY(:ids)"
+        ), {"ids": person_ids}):
+            key = (min(e.src, e.dst), max(e.src, e.dst))
+            best = pairs.get(key)
+            if best is None or e.weight > best["weight"]:
+                pairs[key] = {
+                    "a": key[0], "b": key[1], "weight": round(e.weight, 3),
+                    "type": e.type, "evidence": e.evidence, "semantic": False,
+                }
+
+    # plus "you should know each other" ties from embedding similarity:
+    # expertise vectors compared pairwise, keeping each person's best few
+    if len(person_ids) > 1:
+        sims = conn.execute(text(
+            "SELECT f1.person_id AS a, f2.person_id AS b, "
+            "1 - (f1.embedding <=> f2.embedding) AS sim "
+            "FROM facets f1 JOIN facets f2 "
+            "ON f1.person_id < f2.person_id "
+            "AND f1.kind = 'expertise' AND f2.kind = 'expertise' "
+            "WHERE f1.embedding IS NOT NULL AND f2.embedding IS NOT NULL "
+            "AND f1.person_id = ANY(:ids) AND f2.person_id = ANY(:ids) "
+            "ORDER BY sim DESC"
+        ), {"ids": person_ids}).all()
+        sem_degree: dict[int, int] = {}
+        for s in sims:
+            sim = float(s.sim)
+            if sim < 0.45:
+                break  # sorted, nothing stronger follows
+            key = (s.a, s.b)
+            if key in pairs:
+                continue  # a real shared history beats a similarity guess
+            if sem_degree.get(s.a, 0) >= 4 or sem_degree.get(s.b, 0) >= 4:
+                continue  # cap so the room doesn't become a hairball
+            sem_degree[s.a] = sem_degree.get(s.a, 0) + 1
+            sem_degree[s.b] = sem_degree.get(s.b, 0) + 1
+            pairs[key] = {
+                "a": s.a, "b": s.b, "weight": round(sim, 3),
+                "type": "semantic", "evidence": "similar expertise — should meet",
+                "semantic": True,
+            }
+
+    return {"nodes": nodes, "edges": list(pairs.values())}
+
+
 @app.get("/api/admin/events/{event_id}/graph")
 def event_graph(event_id: int, authorization: str | None = Header(default=None)):
-    """Everyone in the room and the connections between them."""
     _require_admin(authorization)
     with engine.connect() as conn:
         exists = conn.execute(text("SELECT 1 FROM events WHERE id = :id"), {"id": event_id}).first()
         if exists is None:
             raise HTTPException(status_code=404, detail="Event not found")
-
-        rows = conn.execute(text(
-            "SELECT u.id AS user_id, u.email, p.id AS person_id, p.name, p.title, p.org_unit "
-            "FROM event_members m JOIN users u ON u.id = m.user_id "
-            "LEFT JOIN people p ON p.id = u.person_id "
-            "WHERE m.event_id = :id ORDER BY m.joined_at"
-        ), {"id": event_id}).all()
-
-        nodes = []
-        person_ids = []
-        for r in rows:
-            if r.person_id is not None:
-                person_ids.append(r.person_id)
-                nodes.append({
-                    "id": r.person_id, "name": r.name, "title": r.title,
-                    "org_unit": r.org_unit, "has_profile": True,
-                })
-            else:
-                pretty = r.email.split("@")[0].replace(".", " ").title()
-                nodes.append({
-                    "id": -r.user_id, "name": pretty, "title": None,
-                    "org_unit": None, "has_profile": False,
-                })
-
-        # strongest stored tie per pair among the attendees
-        pairs: dict[tuple[int, int], dict] = {}
-        if person_ids:
-            for e in conn.execute(text(
-                "SELECT src, dst, type, weight, evidence FROM edges "
-                "WHERE src = ANY(:ids) AND dst = ANY(:ids)"
-            ), {"ids": person_ids}):
-                key = (min(e.src, e.dst), max(e.src, e.dst))
-                best = pairs.get(key)
-                if best is None or e.weight > best["weight"]:
-                    pairs[key] = {
-                        "a": key[0], "b": key[1], "weight": round(e.weight, 3),
-                        "type": e.type, "evidence": e.evidence, "semantic": False,
-                    }
-
-        # plus "you should know each other" ties from embedding similarity:
-        # expertise vectors compared pairwise, keeping each person's best few
-        if len(person_ids) > 1:
-            sims = conn.execute(text(
-                "SELECT f1.person_id AS a, f2.person_id AS b, "
-                "1 - (f1.embedding <=> f2.embedding) AS sim "
-                "FROM facets f1 JOIN facets f2 "
-                "ON f1.person_id < f2.person_id "
-                "AND f1.kind = 'expertise' AND f2.kind = 'expertise' "
-                "WHERE f1.embedding IS NOT NULL AND f2.embedding IS NOT NULL "
-                "AND f1.person_id = ANY(:ids) AND f2.person_id = ANY(:ids) "
-                "ORDER BY sim DESC"
-            ), {"ids": person_ids}).all()
-            sem_degree: dict[int, int] = {}
-            for s in sims:
-                sim = float(s.sim)
-                if sim < 0.45:
-                    break  # sorted, nothing stronger follows
-                key = (s.a, s.b)
-                if key in pairs:
-                    continue  # a real shared history beats a similarity guess
-                if sem_degree.get(s.a, 0) >= 4 or sem_degree.get(s.b, 0) >= 4:
-                    continue  # cap so the room doesn't become a hairball
-                sem_degree[s.a] = sem_degree.get(s.a, 0) + 1
-                sem_degree[s.b] = sem_degree.get(s.b, 0) + 1
-                pairs[key] = {
-                    "a": s.a, "b": s.b, "weight": round(sim, 3),
-                    "type": "semantic", "evidence": "similar expertise — should meet",
-                    "semantic": True,
-                }
-
-    return {"nodes": nodes, "edges": list(pairs.values())}
-
+        return _room_graph(conn, event_id)
 
 
 class EventSettings(BaseModel):
@@ -679,6 +681,95 @@ def join_event(code: str, authorization: str | None = Header(default=None)):
     return {"event": event.name, "already_joined": False}
 
 
+# --- My events (member view) --------------------------------------------------------
+# Attendees get their own view of an event: who's in the room and how they're
+# tied to each other. Open events read as "live"; closed ones are history.
+
+@app.get("/api/my/events")
+def my_events(authorization: str | None = Header(default=None)):
+    """Events the signed-in person has joined, live ones first."""
+    user_id = _require_user(authorization)
+    with engine.connect() as conn:
+        rows = conn.execute(text(
+            "SELECT e.id, e.name, e.description, e.is_open, e.created_at, m.joined_at, "
+            "(SELECT COUNT(*) FROM event_members WHERE event_id = e.id) AS member_count "
+            "FROM event_members m JOIN events e ON e.id = m.event_id "
+            "WHERE m.user_id = :u "
+            "ORDER BY e.is_open DESC, m.joined_at DESC"
+        ), {"u": user_id}).mappings().all()
+    return [dict(r) for r in rows]
+
+
+@app.get("/api/my/events/{event_id}")
+def my_event(event_id: int, authorization: str | None = Header(default=None)):
+    """One event the signed-in person attended: details plus the room graph.
+    `me` is their person id so the client can light up their own ties."""
+    user_id = _require_user(authorization)
+    with engine.connect() as conn:
+        row = conn.execute(text(
+            "SELECT e.id, e.name, e.description, e.is_open, e.created_at, m.joined_at, "
+            "u.person_id AS me "
+            "FROM event_members m "
+            "JOIN events e ON e.id = m.event_id "
+            "JOIN users u ON u.id = m.user_id "
+            "WHERE e.id = :e AND m.user_id = :u"
+        ), {"e": event_id, "u": user_id}).first()
+        if row is None:
+            # not found and not-a-member look the same: no leaking other events
+            raise HTTPException(status_code=404, detail="You weren't part of this event")
+        graph = _room_graph(conn, event_id)
+    return {
+        "id": row.id,
+        "name": row.name,
+        "description": row.description,
+        "is_open": row.is_open,
+        "created_at": row.created_at,
+        "joined_at": row.joined_at,
+        "me": row.me,
+        "nodes": graph["nodes"],
+        "edges": graph["edges"],
+    }
+
+
+class ConnectBody(BaseModel):
+    event_id: int | None = None  # where you met, for the edge's evidence text
+
+
+@app.post("/api/people/{person_id}/connect", status_code=201)
+def connect_person(
+    person_id: int,
+    body: ConnectBody | None = None,
+    authorization: str | None = Header(default=None),
+):
+    """Declare that you and this person know each other: a real edge both of
+    your networks can route introductions through."""
+    me = _require_person(authorization)
+    if person_id == me:
+        raise HTTPException(status_code=400, detail="That's you — no need to connect")
+    evidence = "connected directly"
+    with engine.begin() as conn:
+        other = conn.execute(
+            text("SELECT name FROM people WHERE id = :id"), {"id": person_id}
+        ).first()
+        if other is None:
+            raise HTTPException(status_code=404, detail="That person isn't in the network")
+        if body and body.event_id:
+            event = conn.execute(text(
+                "SELECT e.name FROM events e JOIN event_members m ON m.event_id = e.id "
+                "JOIN users u ON u.id = m.user_id "
+                "WHERE e.id = :e AND u.person_id = :p"
+            ), {"e": body.event_id, "p": me}).first()
+            if event:
+                evidence = f"met at {event.name}"
+        a, b = min(me, person_id), max(me, person_id)
+        res = conn.execute(text(
+            "INSERT INTO edges (src, dst, type, weight, started_at, ended_at, evidence) "
+            "VALUES (:a, :b, 'declared', 0.6, CURRENT_DATE, CURRENT_DATE, :ev) "
+            "ON CONFLICT (src, dst, type) DO NOTHING"
+        ), {"a": a, "b": b, "ev": evidence})
+    return {"connected": True, "already": res.rowcount == 0, "person": other.name}
+
+
 # --- 6 Degrees API ----------------------------------------------------------------
 
 @app.get("/api/projects")
@@ -731,13 +822,14 @@ def search_people(req: SearchRequest, authorization: str | None = Header(default
 @app.get("/api/network")
 def get_network(
     focus_id: int | None = None,
+    degrees: int = 3,
     authorization: str | None = Header(default=None),
 ):
     import engine as matching
 
     person_id = _require_person(authorization)
     with engine.connect() as conn:
-        return matching.network(conn, person_id, focus_id)
+        return matching.network(conn, person_id, focus_id, degrees=degrees)
 
 
 # --- Profiles ---------------------------------------------------------------------

@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import AppShell from './components/layout/AppShell'
 import { GuestOnly, RequireAuth, RequireProfile } from './components/layout/guards'
+import { ToastProvider } from './components/ui'
 import { AuthProvider } from './hooks/useAuth'
 import { Register, SignIn } from './pages/AuthForm'
 import Network from './pages/Network'
@@ -11,6 +12,7 @@ import Setup from './pages/Setup'
 export default function App() {
   return (
     <BrowserRouter>
+      <ToastProvider>
       <AuthProvider>
         <Routes>
           <Route element={<GuestOnly />}>
@@ -29,6 +31,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>
+      </ToastProvider>
     </BrowserRouter>
   )
 }

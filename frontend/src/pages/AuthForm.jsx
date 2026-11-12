@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import AuthLayout from '../components/layout/AuthLayout'
-import { Button, Notice, TextField } from '../components/ui'
+import { Button, Spinner, TextField, useToast } from '../components/ui'
 import { useAuth } from '../hooks/useAuth'
 
 function EyeIcon({ open }) {
@@ -31,22 +31,21 @@ const STRENGTH_LABEL = ['', 'Too short', 'Okay', 'Strong']
 function AuthForm({ mode }) {
   const isRegister = mode === 'register'
   const { signIn, register } = useAuth()
+  const toast = useToast()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState(null)
 
   const strength = strengthOf(password)
 
   async function submit(event) {
     event.preventDefault()
     setBusy(true)
-    setError(null)
     try {
       await (isRegister ? register : signIn)(email, password)
     } catch (err) {
-      setError(err.message)
+      toast.error(err.message)
       setBusy(false)
     }
   }
@@ -108,12 +107,9 @@ function AuthForm({ mode }) {
             <span className="pw-meter__label">{STRENGTH_LABEL[strength]}</span>
           </div>
         )}
-        {error && <Notice>{error}</Notice>}
         <Button type="submit" variant="primary" size="lg" block disabled={busy}>
           {busy ? (
-            <span className="btn-busy"><i className="spinner" aria-hidden="true" />
-              {isRegister ? 'Creating your account…' : 'Signing you in…'}
-            </span>
+            <><Spinner size={16} /> {isRegister ? 'Creating your account…' : 'Signing you in…'}</>
           ) : isRegister ? 'Create account' : 'Sign in'}
         </Button>
       </form>

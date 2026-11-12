@@ -141,7 +141,7 @@ export default function Network() {
           activeId={target?.id}
           onPick={select}
         />
-        <InvitePanel />
+        
       </aside>
     </div>
   )

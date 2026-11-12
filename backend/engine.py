@@ -15,6 +15,9 @@ from llm import embed_texts
 
 THIS_YEAR = 2026
 NO_PATH_STRENGTH = 0.02  # floor so unreachable people still rank, labeled "cold"
+MAX_HOPS = 4             # normal search: beyond that an intro chain is fiction
+TARGET_MAX_HOPS = 6      # Find the Target: best effort, so a long weak path still counts
+PUBLIC_EDGE_FACTOR = 0.5 # edges inferred from public web data start at half weight
 
 
 def avatar_url(key: str | None) -> str | None:
@@ -33,7 +36,7 @@ def load_graph(conn) -> nx.Graph:
     return G
 
 
-def strongest_path(G: nx.Graph, a: int, b: int):
+def strongest_path(G: nx.Graph, a: int, b: int, max_hops: int = MAX_HOPS):
     """(node_ids, strength) of the strongest path, or None if unreachable."""
     if a not in G or b not in G:
         return None
@@ -41,7 +44,7 @@ def strongest_path(G: nx.Graph, a: int, b: int):
         path = nx.shortest_path(G, a, b, weight="cost")
     except nx.NetworkXNoPath:
         return None
-    if len(path) > 5:  # cap at 4 hops: beyond that an intro chain is fiction
+    if len(path) - 1 > max_hops:
         return None
     strength = math.prod(G.edges[u, v]["w"] for u, v in zip(path, path[1:]))
     return path, strength
@@ -109,7 +112,10 @@ def search(conn, query: str, requester_id: int, limit: int = 5) -> list[dict]:
     # them, even though the semantic index only covers expertise text.
     by_id = {c["person_id"]: c for c in candidates}
     for r in conn.execute(
-        text("SELECT id, name FROM people WHERE name ILIKE :q AND id != :me LIMIT 10"),
+        text(
+            "SELECT id, name FROM people "
+            "WHERE name ILIKE :q AND id != :me AND kind = 'staff' LIMIT 10"
+        ),
         {"q": f"%{query.strip()}%", "me": requester_id},
     ):
         hit = by_id.get(r.id)
@@ -199,15 +205,22 @@ def search(conn, query: str, requester_id: int, limit: int = 5) -> list[dict]:
 def _edge_info(conn, a: int, b: int) -> dict:
     row = conn.execute(
         text(
-            "SELECT type, weight, evidence FROM edges "
-            "WHERE (src = :a AND dst = :b) OR (src = :b AND dst = :a) "
-            "ORDER BY weight DESC LIMIT 1"
+            "SELECT e.type, e.weight, e.evidence, "
+            "  (ps.kind = 'external' OR pd.kind = 'external') AS inferred "
+            "FROM edges e JOIN people ps ON ps.id = e.src JOIN people pd ON pd.id = e.dst "
+            "WHERE (e.src = :a AND e.dst = :b) OR (e.src = :b AND e.dst = :a) "
+            "ORDER BY e.weight DESC LIMIT 1"
         ),
         {"a": a, "b": b},
     ).first()
     if row is None:
-        return {"type": "?", "weight": 0, "evidence": ""}
-    return {"type": row.type, "weight": row.weight, "evidence": row.evidence}
+        return {"type": "?", "weight": 0, "evidence": "", "inferred": False}
+    return {
+        "type": row.type,
+        "weight": row.weight,
+        "evidence": row.evidence,
+        "inferred": bool(row.inferred),
+    }
 
 
 # --- Network view ---------------------------------------------------------------
@@ -245,7 +258,13 @@ def network(
         p = all_paths[n]
         return math.prod(G.edges[u, v]["w"] for u, v in zip(p, p[1:]))
 
-    ranked = sorted((n for n in paths if n != requester_id), key=lambda n: -strength(n))
+    externals = set(
+        conn.execute(text("SELECT id FROM people WHERE kind = 'external'")).scalars()
+    )
+    ranked = sorted(
+        (n for n in paths if n != requester_id and n not in externals),
+        key=lambda n: -strength(n),
+    )
     chosen = {requester_id}
     per_via: dict[int, int] = {}
     # ring by ring: each depth keeps its strongest few, spread across introducers
@@ -306,6 +325,7 @@ def network(
                 "org_unit": person.org_unit,
                 "company": person.company,
                 "is_real": person.is_real,
+                "external": n in externals,
                 "avatar_url": avatar_url(person.avatar_key),
                 "linkedin_url": person.linkedin_url,
                 "depth": len(p) - 1,
@@ -360,9 +380,27 @@ def _overlap_weight(base, s1, e1, s2, e2):
     return max(0.05, min(0.95, round(base * overlap * recency, 3))), s, e
 
 
-def build_edges_for_person(conn, pid: int) -> int:
-    """Create employer/project/semantic edges for one person. Returns count."""
+def build_edges_for_person(conn, pid: int, weight_factor: float = 1.0) -> int:
+    """Create employer/project/semantic edges for one person. Returns count.
+
+    weight_factor < 1 marks evidence from public web data (Find the Target):
+    those edges start weaker than first-hand CV evidence, carry a
+    "(public record)" note, and skip semantic edges (externals have no facets).
+    """
     created = 0
+    public = weight_factor < 1.0
+    externals = set(
+        conn.execute(text("SELECT id FROM people WHERE kind = 'external'")).scalars()
+    )
+
+    # A link to (or from) someone found on the web rests on public data, so it
+    # starts weaker and says so, whichever side was added first
+    def scaled(w, other):
+        f = weight_factor if public else (PUBLIC_EDGE_FACTOR if other in externals else 1.0)
+        return max(0.03, round(w * f, 3))
+
+    def note(other):
+        return " (public record)" if public or other in externals else ""
 
     def insert(other, etype, weight, s, e, evidence):
         nonlocal created
@@ -391,7 +429,7 @@ def build_edges_for_person(conn, pid: int) -> int:
     ):
         w, s, e = _overlap_weight(0.4, r.s1, r.e1, r.s2, r.e2)
         if w:
-            insert(r.other, "employer", w, s, e, f"overlapped at {r.org}")
+            insert(r.other, "employer", scaled(w, r.other), s, e, f"overlapped at {r.org}{note(r.other)}")
 
     # project overlaps
     for r in conn.execute(
@@ -406,7 +444,10 @@ def build_edges_for_person(conn, pid: int) -> int:
     ):
         w, s, e = _overlap_weight(0.65, r.s1, r.e1, r.s2, r.e2)
         if w:
-            insert(r.other, "project", w, s, e, f"both on project {r.project}")
+            insert(r.other, "project", scaled(w, r.other), s, e, f"both on project {r.project}{note(r.other)}")
+
+    if public:
+        return created
 
     # semantic "you should know each other" edges (needs embeddings)
     for r in conn.execute(

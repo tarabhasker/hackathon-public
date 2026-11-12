@@ -4,8 +4,12 @@ import { api } from '../api'
 // Debounced semantic search for "who can help with <query>".
 // Searches as the signed-in person (the backend reads it from the token).
 // results: null while idle (empty query), else [{person, hops, why, ...}].
+// targets: saved Find the Target people matching the query (Premium only);
+// targetsLocked: how many matched for a free account (to show the upsell).
 export function usePeopleSearch(query, { limit = 5, delay = 350 } = {}) {
   const [results, setResults] = useState(null)
+  const [targets, setTargets] = useState([])
+  const [targetsLocked, setTargetsLocked] = useState(0)
   const [searching, setSearching] = useState(false)
   const [error, setError] = useState(null)
 
@@ -13,6 +17,8 @@ export function usePeopleSearch(query, { limit = 5, delay = 350 } = {}) {
     const q = query.trim()
     if (!q) {
       setResults(null)
+      setTargets([])
+      setTargetsLocked(0)
       setSearching(false)
       setError(null)
       return
@@ -24,6 +30,8 @@ export function usePeopleSearch(query, { limit = 5, delay = 350 } = {}) {
         .then((data) => {
           if (!live) return
           setResults(data.results)
+          setTargets(data.targets || [])
+          setTargetsLocked(data.targets_locked || 0)
           setError(null)
         })
         .catch((err) => live && setError(err.message))
@@ -35,5 +43,5 @@ export function usePeopleSearch(query, { limit = 5, delay = 350 } = {}) {
     }
   }, [query, limit, delay])
 
-  return { results, searching, error }
+  return { results, targets, targetsLocked, searching, error }
 }

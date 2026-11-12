@@ -13,6 +13,7 @@ import { MOBILE_QUERY, useMediaQuery } from '../hooks/useMediaQuery'
 import { useNetwork } from '../hooks/useNetwork'
 import { usePeopleSearch } from '../hooks/usePeopleSearch'
 import { ctaLabel, describePath, firstName, ordinal } from '../lib/network'
+import { looksLikeTarget } from '../lib/target'
 import { MAX_DEGREES } from '../hooks/useNetwork'
 
 const ZOOM = { min: 0.6, max: 1.6, step: 0.2 }
@@ -33,7 +34,9 @@ function savedView() {
 
 // Main UI: the signed-in person's network, search and invites.
 export default function Network() {
-  const me = useAuth().user.person
+  const { user } = useAuth()
+  const me = user.person
+  const premium = user.plan === 'premium' || user.is_admin
   const isMobile = useMediaQuery(MOBILE_QUERY)
   const network = useNetwork()
   const [query, setQuery] = useState('')
@@ -79,15 +82,22 @@ export default function Network() {
   const rows = useMemo(() => {
     const inScope = (p) => scope === 'org' || !isMobile || p.org_unit === me.org_unit
     if (search.results) {
-      return search.results
-        .filter((r) => inScope(r.person))
-        .slice(0, 5)
-        .map((r) => ({ person: r.person, hops: r.hops }))
+      // Find the Target matches lead: searching "Intel Managing Director"
+      // focuses the target, and the graph lights up the route to them
+      const targetRows = search.targets.map((t) => ({ person: t, hops: null, target: true }))
+      const ids = new Set(search.targets.map((t) => t.id))
+      return [
+        ...targetRows,
+        ...search.results
+          .filter((r) => inScope(r.person) && !ids.has(r.person.id))
+          .slice(0, 5)
+          .map((r) => ({ person: r.person, hops: r.hops })),
+      ]
     }
     const far = network.nodes.filter((n) => n.depth === 2)
     const pool = far.length > 0 ? far : network.nodes.filter((n) => n.depth === 1)
     return pool.filter(inScope).slice(0, 4).map((n) => ({ person: n, hops: n.depth }))
-  }, [search.results, network.nodes, scope, isMobile, me.org_unit])
+  }, [search.results, search.targets, network.nodes, scope, isMobile, me.org_unit])
 
   // A new set of matches (or a scope change) focuses the best one
   const { select } = network
@@ -108,6 +118,13 @@ export default function Network() {
     <IntroDialog path={path} byId={byId} target={target} need={query.trim()} onClose={() => setIntroOpen(false)} />
   )
   const heading = search.results ? 'Best matches' : 'Suggested for you'
+  // Light the route hop by hop when the destination is a target, so the demo
+  // reads as a journey; ordinary clicks show the path at once
+  const revealMs = target?.external ? 900 : 0
+  // Offer a web lookup when the query reads like "<role> <company>" but no
+  // saved target matches yet
+  const webLookup =
+    search.results && search.targets.length === 0 && looksLikeTarget(query) ? query.trim() : null
 
   if (isMobile) {
     return (
@@ -198,7 +215,7 @@ export default function Network() {
           ) : network.loading ? (
             <span className="nw-canvas__status" role="status">Loading your network…</span>
           ) : (
-            <NetworkGraph nodes={network.nodes} edges={network.edges} path={path} onSelect={select} zoom={zoom} mode={view} />
+            <NetworkGraph nodes={network.nodes} edges={network.edges} path={path} onSelect={select} zoom={zoom} mode={view} revealMs={revealMs} />
           )}
 
           <div className="nw-legend">
@@ -242,6 +259,9 @@ export default function Network() {
           onConnect={connect}
           connectingId={connectingId}
           connectedIds={justConnected}
+          premium={premium}
+          targetsLocked={search.targetsLocked}
+          webLookup={webLookup}
         />
         <EventsPanel />
         <CoffeeChatInvite

@@ -114,6 +114,18 @@ class SearchRequest(BaseModel):
     limit: int = 5
 
 
+class TargetSearch(BaseModel):
+    company: str
+    role: str
+    query: str | None = None  # what the user typed, e.g. "VAT MY Managing Director"
+    refresh: bool = False  # skip the 90-day cache and search the web again
+
+
+class TargetConfirm(BaseModel):
+    lookup_id: int
+    candidate_index: int
+
+
 class EventCreate(BaseModel):
     name: str
     description: str | None = None
@@ -193,7 +205,7 @@ def submit_quiz(entry: QuizEntry):
 def _user_payload(conn, user_id: int) -> dict | None:
     row = conn.execute(
         text(
-            "SELECT u.id, u.email, u.is_admin, p.id AS pid, p.name, p.title, p.org_unit, p.avatar_key "
+            "SELECT u.id, u.email, u.is_admin, u.plan, p.id AS pid, p.name, p.title, p.org_unit, p.avatar_key "
             "FROM users u LEFT JOIN people p ON p.id = u.person_id WHERE u.id = :id"
         ),
         {"id": user_id},
@@ -209,7 +221,13 @@ def _user_payload(conn, user_id: int) -> dict | None:
             "org_unit": row.org_unit,
             "avatar_url": _avatar_url(row.avatar_key),
         }
-    return {"id": row.id, "email": row.email, "is_admin": row.is_admin, "person": person}
+    return {
+        "id": row.id,
+        "email": row.email,
+        "is_admin": row.is_admin,
+        "plan": row.plan,
+        "person": person,
+    }
 
 
 def _avatar_url(key: str | None) -> str | None:
@@ -238,6 +256,20 @@ def _require_admin(authorization: str | None) -> int:
     if row is None or not row.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
     return user_id
+
+
+def _require_premium(authorization: str | None) -> tuple[int, int]:
+    """(user id, person id) for a Premium user (admins count as Premium).
+    402 for free accounts, so the client can show the upgrade card."""
+    person_id = _require_person(authorization)
+    user_id = _user_id(authorization)
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT plan, is_admin FROM users WHERE id = :id"), {"id": user_id}
+        ).first()
+    if row is None or not (row.plan == "premium" or row.is_admin):
+        raise HTTPException(status_code=402, detail="premium_required")
+    return user_id, person_id
 
 
 def _require_person(authorization: str | None) -> int:
@@ -311,7 +343,10 @@ def admin_overview(authorization: str | None = Header(default=None)):
             "(SELECT COUNT(*) FROM facets WHERE embedding IS NOT NULL) AS embedded_facets, "
             "(SELECT COUNT(*) FROM facets) AS facets, "
             "(SELECT COUNT(*) FROM quiz_entries) AS quiz_entries, "
-            "(SELECT COUNT(*) FROM event_members) AS event_joins"
+            "(SELECT COUNT(*) FROM event_members) AS event_joins, "
+            "(SELECT COUNT(*) FROM users WHERE plan = 'premium') AS premium_users, "
+            "(SELECT COUNT(*) FROM target_lookups) AS target_lookups, "
+            "(SELECT COUNT(*) FROM target_lookups WHERE best_rung = 4) AS coverage_gaps"
         )).mappings().one()
 
         joins_by_day = conn.execute(text(
@@ -343,7 +378,7 @@ def admin_users(authorization: str | None = Header(default=None)):
     _require_admin(authorization)
     with engine.connect() as conn:
         rows = conn.execute(text(
-            "SELECT u.id, u.email, u.is_admin, u.created_at, "
+            "SELECT u.id, u.email, u.is_admin, u.plan, u.created_at, "
             "p.id AS person_id, p.name AS person_name "
             "FROM users u LEFT JOIN people p ON p.id = u.person_id "
             "ORDER BY u.created_at DESC"
@@ -364,6 +399,22 @@ def admin_toggle(user_id: int, authorization: str | None = Header(default=None))
     if row is None:
         raise HTTPException(status_code=404, detail="User not found")
     return {"id": user_id, "is_admin": row.is_admin}
+
+
+@app.post("/api/admin/users/{user_id}/toggle-premium")
+def admin_toggle_premium(user_id: int, authorization: str | None = Header(default=None)):
+    _require_admin(authorization)
+    with engine.begin() as conn:
+        row = conn.execute(
+            text(
+                "UPDATE users SET plan = CASE plan WHEN 'premium' THEN 'free' ELSE 'premium' END "
+                "WHERE id = :id RETURNING plan"
+            ),
+            {"id": user_id},
+        ).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"id": user_id, "plan": row.plan}
 
 
 @app.delete("/api/admin/people/{person_id}", status_code=204)
@@ -796,7 +847,7 @@ def list_people(authorization: str | None = Header(default=None)):
         rows = conn.execute(
             text(
                 "SELECT id, name, title, org_unit, is_real, avatar_key FROM people "
-                "ORDER BY is_real DESC, name"
+                "WHERE kind = 'staff' ORDER BY is_real DESC, name"
             )
         ).mappings().all()
     return [
@@ -815,9 +866,24 @@ def search_people(req: SearchRequest, authorization: str | None = Header(default
     query = req.query.strip()
     if not query:
         raise HTTPException(status_code=400, detail="'query' must not be empty")
+    import target as tgt
+
+    user_id = _user_id(authorization)
     with engine.connect() as conn:
         results = matching.search(conn, query, person_id, limit=min(req.limit, 20))
-    return {"query": query, "results": results}
+        # Find the Target (premium): saved targets that match the query come
+        # back alongside people; free accounts only learn that some exist
+        targets = tgt.match_targets(conn, query)
+        account = conn.execute(
+            text("SELECT plan, is_admin FROM users WHERE id = :id"), {"id": user_id}
+        ).first()
+    premium = account is not None and (account.plan == "premium" or account.is_admin)
+    return {
+        "query": query,
+        "results": results,
+        "targets": targets if premium else [],
+        "targets_locked": 0 if premium else len(targets),
+    }
 
 
 @app.get("/api/network")
@@ -831,6 +897,205 @@ def get_network(
     person_id = _require_person(authorization)
     with engine.connect() as conn:
         return matching.network(conn, person_id, focus_id, degrees=degrees)
+
+
+# --- Find the Target (premium) ------------------------------------------------------
+
+def _lookup_web(company: str, role: str, query: str | None = None) -> dict:
+    """llm.find_target with its failures turned into clear HTTP errors."""
+    import llm
+    from google.genai import errors
+
+    try:
+        return llm.find_target(company, role, query)
+    except llm.LLMUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except llm.SearchQuotaExceeded as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{e}. Enable billing on the Gemini key's project, or set SERPER_API_KEY "
+            "in backend/.env to search Google through Serper.",
+        )
+    except errors.APIError as e:
+        if getattr(e, "code", None) == 429:
+            raise HTTPException(
+                status_code=503,
+                detail="Web search quota is used up for this Gemini API key. "
+                "Enable billing or wait for the quota to reset, then try again.",
+            )
+        raise HTTPException(status_code=502, detail="The web search failed. Try again shortly.")
+    except Exception:
+        raise HTTPException(status_code=502, detail="The web search failed. Try again shortly.")
+
+
+def _lookup_payload(row) -> dict:
+    return {
+        "lookup_id": row.id,
+        "company": row.company,
+        "role": row.role,
+        "candidates": row.candidates,
+        "sources": row.sources,
+        "cached": True,
+        "created_at": row.created_at.isoformat(),
+    }
+
+
+@app.post("/api/target/search")
+def target_search(req: TargetSearch, authorization: str | None = Header(default=None)):
+    import target as tgt
+
+    user_id, _ = _require_premium(authorization)
+    company, role = req.company.strip(), req.role.strip()
+    if not company or not role:
+        raise HTTPException(status_code=400, detail="Enter both a company and a role")
+    query_key = f"{tgt.org_key(company)}|{' '.join(role.lower().split())}"
+
+    if not req.refresh:
+        with engine.connect() as conn:
+            cached = conn.execute(
+                text(
+                    "SELECT id, company, role, candidates, sources, created_at FROM target_lookups "
+                    "WHERE query_key = :k AND jsonb_array_length(candidates) > 0 "
+                    "AND created_at > now() - make_interval(days => :d) "
+                    "ORDER BY created_at DESC LIMIT 1"
+                ),
+                {"k": query_key, "d": tgt.STALE_DAYS},
+            ).first()
+        if cached:
+            return _lookup_payload(cached)
+
+    found = _lookup_web(company, role, (req.query or "").strip() or None)
+    with engine.begin() as conn:
+        row = conn.execute(
+            text(
+                "INSERT INTO target_lookups (user_id, company, role, query_key, candidates, sources) "
+                "VALUES (:u, :c, :r, :k, CAST(:cand AS jsonb), CAST(:src AS jsonb)) "
+                "RETURNING id, company, role, candidates, sources, created_at"
+            ),
+            {
+                "u": user_id, "c": company, "r": role, "k": query_key,
+                "cand": tgt._json(found["candidates"]), "src": tgt._json(found["sources"]),
+            },
+        ).first()
+    return {**_lookup_payload(row), "cached": False, "engine": found.get("engine")}
+
+
+@app.post("/api/target/confirm")
+def target_confirm(req: TargetConfirm, authorization: str | None = Header(default=None)):
+    import llm
+    import target as tgt
+
+    user_id, person_id = _require_premium(authorization)
+    with engine.connect() as conn:
+        lookup = conn.execute(
+            text("SELECT id, role, candidates FROM target_lookups WHERE id = :id"),
+            {"id": req.lookup_id},
+        ).first()
+    if lookup is None:
+        raise HTTPException(status_code=404, detail="Lookup not found")
+    if not 0 <= req.candidate_index < len(lookup.candidates):
+        raise HTTPException(status_code=400, detail="Pick one of the candidates shown")
+    candidate = lookup.candidates[req.candidate_index]
+
+    with engine.begin() as conn:
+        target_id = tgt.save_external(conn, candidate, lookup.role)
+    with engine.begin() as conn:
+        report = tgt.reach(conn, person_id, target_id, cold_draft=llm.draft_cold_intro)
+        # the cached lookup may belong to someone else, so log this user's run
+        conn.execute(
+            text(
+                "INSERT INTO target_lookups (user_id, company, role, query_key, candidates, "
+                "  sources, chosen_person_id, report, best_rung) "
+                "SELECT :u, company, role, query_key, candidates, sources, :p, "
+                "  CAST(:rep AS jsonb), :b FROM target_lookups WHERE id = :id"
+            ),
+            {
+                "u": user_id, "p": target_id, "rep": tgt._json(report),
+                "b": report["best_rung"], "id": lookup.id,
+            },
+        )
+    return report
+
+
+@app.get("/api/target/{target_id}/reach")
+def target_reach(target_id: int, authorization: str | None = Header(default=None)):
+    import llm
+    import target as tgt
+
+    _, person_id = _require_premium(authorization)
+    with engine.connect() as conn:
+        report = tgt.reach(conn, person_id, target_id, cold_draft=llm.draft_cold_intro)
+    if report is None:
+        raise HTTPException(status_code=404, detail="Target not found")
+    return report
+
+
+@app.delete("/api/target/{target_id}")
+def delete_target(target_id: int, authorization: str | None = Header(default=None)):
+    """Remove a target from your list. If nobody else has looked them up, the
+    person goes entirely (career, public-record edges) along with the saved
+    web searches that found them, so searching again runs a fresh web search."""
+    user_id, _ = _require_premium(authorization)
+    with engine.begin() as conn:
+        person = conn.execute(
+            text("SELECT id FROM people WHERE id = :id AND kind = 'external'"), {"id": target_id}
+        ).first()
+        if person is None:
+            raise HTTPException(status_code=404, detail="Target not found")
+        others = conn.execute(
+            text(
+                "SELECT COUNT(*) FROM target_lookups "
+                "WHERE chosen_person_id = :id AND user_id IS DISTINCT FROM :u"
+            ),
+            {"id": target_id, "u": user_id},
+        ).scalar_one()
+        if others:
+            conn.execute(
+                text("DELETE FROM target_lookups WHERE chosen_person_id = :id AND user_id = :u"),
+                {"id": target_id, "u": user_id},
+            )
+            return {"id": target_id, "deleted": "from_your_list"}
+        # the searches that found them, including the cached candidate lists
+        conn.execute(
+            text(
+                "DELETE FROM target_lookups WHERE chosen_person_id = :id OR query_key IN "
+                "(SELECT query_key FROM target_lookups WHERE chosen_person_id = :id)"
+            ),
+            {"id": target_id},
+        )
+        org_id = conn.execute(
+            text("DELETE FROM people WHERE id = :id RETURNING org_id"), {"id": target_id}
+        ).scalar()
+        if org_id:
+            conn.execute(
+                text(
+                    "DELETE FROM organisations o WHERE id = :o "
+                    "AND NOT EXISTS (SELECT 1 FROM people WHERE org_id = o.id)"
+                ),
+                {"o": org_id},
+            )
+    return {"id": target_id, "deleted": "everywhere"}
+
+
+@app.get("/api/targets")
+def my_targets(authorization: str | None = Header(default=None)):
+    """This user's confirmed targets, most recent first (one row per person)."""
+    user_id, _ = _require_premium(authorization)
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT DISTINCT ON (l.chosen_person_id) l.chosen_person_id AS id, p.name, "
+                "  p.title, l.company, l.best_rung, l.created_at "
+                "FROM target_lookups l JOIN people p ON p.id = l.chosen_person_id "
+                "WHERE l.user_id = :u AND l.chosen_person_id IS NOT NULL "
+                "ORDER BY l.chosen_person_id, l.created_at DESC"
+            ),
+            {"u": user_id},
+        ).mappings().all()
+    rows = sorted((dict(r) for r in rows), key=lambda r: r["created_at"], reverse=True)
+    for r in rows:
+        r["created_at"] = r["created_at"].isoformat()
+    return rows[:20]
 
 
 # --- Profiles ---------------------------------------------------------------------
@@ -1210,6 +1475,9 @@ def intake_confirm(profile: ConfirmProfile, authorization: str | None = Header(d
                 )
 
         edges_created = matching.build_edges_for_person(conn, pid)
+        import target as tgt
+
+        edges_created += tgt.build_group_edges(conn, pid)
 
         if user_id is not None:
             conn.execute(

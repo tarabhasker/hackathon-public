@@ -185,7 +185,7 @@ export default function Network() {
           </div>
         </div>
 
-        <div className="nw-canvas">
+        <div className={`nw-canvas nw-canvas--${view}`}>
           {network.error ? (
             <Notice>{network.error}</Notice>
           ) : network.loading ? (

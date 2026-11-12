@@ -73,8 +73,9 @@
   box-sizing: border-box;
   padding: 44px 16px 132px; /* room for the legend above and the path card below */
   background-color: var(--ds-surface);
-  background-image: radial-gradient(var(--ds-line) 1px, transparent 1px);
+  background-image: radial-gradient(var(--ds-line-strong) 1.4px, transparent 1.6px);
   background-size: 22px 22px;
+  transition: background-color 0.3s ease;
   border: 1px solid var(--ds-line);
   border-radius: var(--ds-radius-lg);
   overflow: hidden;
@@ -202,6 +203,11 @@
 .nw-node--you .nw-node__shade {
   background: radial-gradient(circle at 36% 30%, rgba(255, 255, 255, 0.45) 0%, transparent 52%);
 }
+/* Profile photos: no highlight or glare over the face, just a soft darker edge */
+.nw-node .nw-node__av--photo .nw-node__shade {
+  background: radial-gradient(circle at 50% 50%, transparent 60%, color-mix(in srgb, var(--secondary) 30%, transparent) 100%);
+}
+
 /* On your path: tinted planets with a ring */
 .nw-node--target .nw-node__av {
   --planet: var(--primary);
@@ -627,3 +633,10 @@
 .nw-event__text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
 .nw-event__name { font-size: 13.5px; font-weight: 600; color: var(--secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nw-event__meta { font-size: 12px; color: var(--secondary-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* 3D view: no flat dot grid (it fights the depth); the floor grid drawn inside
+   the graph gives the sense of space instead, over a soft vignette. */
+.nw-canvas--3d {
+  background-image: radial-gradient(ellipse 70% 60% at 50% 46%, var(--ds-surface) 0%, var(--ds-surface) 45%, var(--secondary-soft) 100%);
+  background-size: auto;
+}

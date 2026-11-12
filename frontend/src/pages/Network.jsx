@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import CoffeeChatInvite from '../components/coffee/CoffeeChatInvite'
 import MobileFind from '../components/network/MobileFind'
 import NetworkGraph from '../components/network/NetworkGraph'
 import PathCard from '../components/network/PathCard'
@@ -9,7 +10,7 @@ import { useCopied } from '../hooks/useCopied'
 import { MOBILE_QUERY, useMediaQuery } from '../hooks/useMediaQuery'
 import { useNetwork } from '../hooks/useNetwork'
 import { usePeopleSearch } from '../hooks/usePeopleSearch'
-import { ctaLabel, describePath, draftMessage } from '../lib/network'
+import { ctaLabel, describePath, draftMessage, firstName } from '../lib/network'
 
 const ZOOM = { min: 0.6, max: 1.6, step: 0.2 }
 const VIEW_KEY = 'bff.networkView'
@@ -176,7 +177,15 @@ export default function Network() {
           activeId={target?.id}
           onPick={select}
         />
-        
+        <CoffeeChatInvite
+          sender={me}
+          recipient={target?.depth === 1 ? target : null}
+          emptyText={
+            target
+              ? `You and ${firstName(target.name)} aren't connected yet. Coffee chats are for people you've met — pick a 1st-degree connection.`
+              : undefined
+          }
+        />
       </aside>
     </div>
   )

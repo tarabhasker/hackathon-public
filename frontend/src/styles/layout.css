@@ -128,6 +128,21 @@
   display: flex;
   justify-content: center;
   align-items: flex-start;
+  background:
+    radial-gradient(640px 320px at 88% -4%, var(--primary-soft), transparent 70%),
+    radial-gradient(540px 320px at -6% 104%, var(--secondary-soft), transparent 70%),
+    var(--ds-bg);
+}
+
+.auth__card { animation: auth-in 0.35s ease both; }
+
+@keyframes auth-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth__card { animation: none; }
 }
 .auth__inner { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 20px; margin-top: 4vh; }
 .auth__inner--wide { max-width: 520px; }

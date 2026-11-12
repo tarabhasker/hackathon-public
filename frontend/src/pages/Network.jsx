@@ -18,11 +18,11 @@ const ZOOM = { min: 0.6, max: 1.6, step: 0.2 }
 export default function Network() {
   const me = useAuth().user.person
   const isMobile = useMediaQuery(MOBILE_QUERY)
-  const network = useNetwork(me.id)
+  const network = useNetwork()
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState('org') // 'org' | 'division' (mobile filter)
   const [zoom, setZoom] = useState(1)
-  const search = usePeopleSearch(query, me.id, { limit: 20 })
+  const search = usePeopleSearch(query, { limit: 20 })
   const [ctaDone, copyDraft] = useCopied(2600)
 
   // Rows for the result list: search matches, or the closest 2-hop people as suggestions

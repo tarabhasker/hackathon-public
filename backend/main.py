@@ -62,7 +62,9 @@ class QuizEntry(BaseModel):
 
 class SearchRequest(BaseModel):
     query: str
-    requester_id: int
+    # ignored since auth hardening: the requester is whoever the token names;
+    # kept optional so older clients sending it don't break
+    requester_id: int | None = None
     limit: int = 5
 
 
@@ -156,6 +158,20 @@ def _require_user(authorization: str | None) -> int:
     return user_id
 
 
+def _require_person(authorization: str | None) -> int:
+    """The signed-in user's person id. 401 without a valid token, 409 before setup."""
+    user_id = _require_user(authorization)
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT person_id FROM users WHERE id = :id"), {"id": user_id}
+        ).first()
+    if row is None:
+        raise HTTPException(status_code=401, detail="Sign in to continue")
+    if row.person_id is None:
+        raise HTTPException(status_code=409, detail="Finish setting up your profile first")
+    return row.person_id
+
+
 @app.post("/api/auth/register", status_code=201)
 def register(creds: Credentials):
     email = creds.email.strip().lower()
@@ -201,8 +217,9 @@ def whoami(authorization: str | None = Header(default=None)):
 # --- 6 Degrees API ----------------------------------------------------------------
 
 @app.get("/api/projects")
-def list_projects():
+def list_projects(authorization: str | None = Header(default=None)):
     """Known project names, so first-time setup can link people to real teams."""
+    _require_user(authorization)
     with engine.connect() as conn:
         rows = conn.execute(
             text("SELECT DISTINCT project FROM project_memberships ORDER BY project")
@@ -211,7 +228,8 @@ def list_projects():
 
 
 @app.get("/api/people")
-def list_people():
+def list_people(authorization: str | None = Header(default=None)):
+    _require_user(authorization)
     with engine.connect() as conn:
         rows = conn.execute(
             text(
@@ -223,37 +241,34 @@ def list_people():
 
 
 @app.post("/api/search")
-def search_people(req: SearchRequest):
+def search_people(req: SearchRequest, authorization: str | None = Header(default=None)):
     import engine as matching
 
+    # Who you search AS comes from your token, never from the request body
+    person_id = _require_person(authorization)
     query = req.query.strip()
     if not query:
         raise HTTPException(status_code=400, detail="'query' must not be empty")
     with engine.connect() as conn:
-        exists = conn.execute(
-            text("SELECT 1 FROM people WHERE id = :id"), {"id": req.requester_id}
-        ).first()
-        if not exists:
-            raise HTTPException(status_code=404, detail="requester not found")
-        results = matching.search(conn, query, req.requester_id, limit=min(req.limit, 20))
+        results = matching.search(conn, query, person_id, limit=min(req.limit, 20))
     return {"query": query, "results": results}
 
 
 @app.get("/api/network")
-def get_network(requester_id: int, focus_id: int | None = None):
+def get_network(
+    focus_id: int | None = None,
+    authorization: str | None = Header(default=None),
+):
     import engine as matching
 
+    person_id = _require_person(authorization)
     with engine.connect() as conn:
-        exists = conn.execute(
-            text("SELECT 1 FROM people WHERE id = :id"), {"id": requester_id}
-        ).first()
-        if not exists:
-            raise HTTPException(status_code=404, detail="requester not found")
-        return matching.network(conn, requester_id, focus_id)
+        return matching.network(conn, person_id, focus_id)
 
 
 @app.post("/api/intake/cv")
-async def intake_cv(file: UploadFile):
+async def intake_cv(file: UploadFile, authorization: str | None = Header(default=None)):
+    _require_user(authorization)
     from io import BytesIO
 
     from pypdf import PdfReader
@@ -293,16 +308,15 @@ def intake_confirm(profile: ConfirmProfile, authorization: str | None = Header(d
     if not name:
         raise HTTPException(status_code=400, detail="'name' is required")
 
-    # Signed-in callers get the new person linked to their account (first-time setup)
-    user_id = _user_id(authorization)
-    if user_id is not None:
-        with engine.connect() as conn:
-            account = _user_payload(conn, user_id)
-        if account is None:
-            raise HTTPException(status_code=401, detail="Sign in to continue")
-        if account["person"] is not None:
-            raise HTTPException(status_code=409, detail="Your profile is already set up")
-        profile.email = profile.email or account["email"]
+    # First-time setup: the new person is linked to the signed-in account
+    user_id = _require_user(authorization)
+    with engine.connect() as conn:
+        account = _user_payload(conn, user_id)
+    if account is None:
+        raise HTTPException(status_code=401, detail="Sign in to continue")
+    if account["person"] is not None:
+        raise HTTPException(status_code=409, detail="Your profile is already set up")
+    profile.email = profile.email or account["email"]
 
     skills = ", ".join(profile.skills) or "general problem solving"
     projects = ", ".join(profile.projects)

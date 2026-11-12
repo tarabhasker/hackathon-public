@@ -149,3 +149,53 @@
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* --- Input trailing slot (e.g. show-password toggle) ----------------------- */
+.ui-input-wrap { position: relative; display: flex; }
+.ui-input-wrap .ui-input { width: 100%; }
+.ui-input--trailing { padding-right: 42px; }
+.ui-input__trailing {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+}
+.ui-pwtoggle {
+  border: none;
+  background: none;
+  padding: 6px;
+  border-radius: var(--ds-radius-sm);
+  color: var(--secondary-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+.ui-pwtoggle:hover { color: var(--secondary); background: var(--secondary-soft); }
+
+/* --- Password strength meter ------------------------------------------------ */
+.pw-meter { display: flex; align-items: center; gap: 10px; margin-top: -8px; }
+.pw-meter__bars { display: flex; gap: 4px; flex: 0 0 auto; }
+.pw-meter__bars i {
+  width: 34px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--ds-line-strong);
+  transition: background 0.25s ease;
+}
+.pw-meter__bars[data-level='1'] i:nth-child(1) { background: var(--ds-danger); }
+.pw-meter__bars[data-level='2'] i:nth-child(-n + 2) { background: var(--ds-warn); }
+.pw-meter__bars[data-level='3'] i { background: var(--ds-ok); }
+.pw-meter__label { font-size: 12px; color: var(--secondary-muted); }
+
+/* --- Busy button spinner ----------------------------------------------------- */
+.btn-busy { display: inline-flex; align-items: center; gap: 8px; }
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }

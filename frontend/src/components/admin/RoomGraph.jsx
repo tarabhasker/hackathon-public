@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { assetUrl } from '../../api'
 import { initials } from '../../lib/network'
 
 // The room as a force-directed graph in the main network page's visual
@@ -23,13 +24,16 @@ function rand(seed) {
 
 // Force layout from a clustered-cloud start (not a ring): teams seed near a
 // shared spot with jitter, springs pull tied people together, repulsion and
-// centre gravity keep it an organic blob.
-function forceLayout(nodes, edges) {
+// centre gravity keep it an organic blob. With `egoId`, that person is pinned
+// to the centre and stronger ties relax at shorter arm's length, so the people
+// closest to you sit closest on screen.
+function forceLayout(nodes, edges, egoId = null) {
   const n = nodes.length
   if (n === 0) return {}
   const idx = Object.fromEntries(nodes.map((node, i) => [node.id, i]))
   const cx = W / 2
   const cy = H / 2
+  const egoIdx = egoId != null ? idx[egoId] : undefined
 
   // one anchor angle per team; members start in a jittered cloud around it
   const teams = [...new Set(nodes.map((node) => node.org_unit || '~'))].sort()
@@ -49,11 +53,15 @@ function forceLayout(nodes, edges) {
     ys[i] = a.y + (rand(i * 2 + 2) - 0.5) * 260
   })
 
+  // [i, j, pull, rest]: in ego mode a stronger tie has a shorter rest length
   const springs = edges
     .filter((e) => idx[e.a] !== undefined && idx[e.b] !== undefined)
-    .map((e) => [idx[e.a], idx[e.b], e.semantic ? 0.5 : Math.min(1, e.weight + 0.4)])
+    .map((e) => {
+      const strength = e.semantic ? 0.45 : Math.min(1, e.weight)
+      const rest = egoId != null ? 150 + (1 - strength) * 160 : 170
+      return [idx[e.a], idx[e.b], e.semantic ? 0.5 : Math.min(1, e.weight + 0.4), rest]
+    })
 
-  const rest = 170 // springs relax at a comfortable arm's length
   const repulsion = 5200
   for (let step = 0; step < 260; step++) {
     const t = 1 - step / 260 // cooling
@@ -77,7 +85,7 @@ function forceLayout(nodes, edges) {
       fx[i] += (cx - xs[i]) * 0.008
       fy[i] += (cy - ys[i]) * 0.008
     }
-    for (const [i, j, k] of springs) {
+    for (const [i, j, k, rest] of springs) {
       const dx = xs[j] - xs[i]
       const dy = ys[j] - ys[i]
       const d = Math.hypot(dx, dy) || 1
@@ -88,6 +96,7 @@ function forceLayout(nodes, edges) {
       fy[j] -= dy * pull
     }
     for (let i = 0; i < n; i++) {
+      if (i === egoIdx) continue // you hold the centre
       xs[i] += fx[i] * t
       ys[i] += fy[i] * t
     }
@@ -132,6 +141,17 @@ function forceLayout(nodes, edges) {
     if (!moved) break
   }
 
+  // ego mode: normalisation and overlap nudges may have drifted you off
+  // centre — shift the whole room so you end up exactly in the middle
+  if (egoIdx !== undefined) {
+    const dx = cx - xs[egoIdx]
+    const dy = cy - ys[egoIdx]
+    for (let i = 0; i < n; i++) {
+      xs[i] += dx
+      ys[i] += dy
+    }
+  }
+
   const pos = {}
   nodes.forEach((node) => {
     const i = idx[node.id]
@@ -143,18 +163,23 @@ function forceLayout(nodes, edges) {
   return pos
 }
 
-export default function RoomGraph({ nodes, edges, focusTeam = null, meId = null }) {
+export default function RoomGraph({ nodes, edges, focusTeam = null, meId = null, egoId = null }) {
   const [hot, setHot] = useState(null)
-  const positions = useMemo(() => forceLayout(nodes, edges), [nodes, edges])
+  // ego mode: only the ties between you and everyone else are drawn
+  const shown = useMemo(
+    () => (egoId == null ? edges : edges.filter((e) => e.a === egoId || e.b === egoId)),
+    [edges, egoId],
+  )
+  const positions = useMemo(() => forceLayout(nodes, shown, egoId), [nodes, shown, egoId])
 
   const degree = useMemo(() => {
     const d = {}
-    edges.forEach((e) => {
+    shown.forEach((e) => {
       d[e.a] = (d[e.a] || 0) + 1
       d[e.b] = (d[e.b] || 0) + 1
     })
     return d
-  }, [edges])
+  }, [shown])
 
   const teamOf = useMemo(() => Object.fromEntries(nodes.map((node) => [node.id, node.org_unit])), [nodes])
   const inFocus = (id) => focusTeam === null || teamOf[id] === focusTeam
@@ -165,9 +190,13 @@ export default function RoomGraph({ nodes, edges, focusTeam = null, meId = null 
       <div
         className="nw-graph rg-canvas"
         role="img"
-        aria-label={`${nodes.length} people in the room, ${edges.length} connections between them`}
+        aria-label={
+          egoId == null
+            ? `${nodes.length} people in the room, ${shown.length} connections between them`
+            : `${nodes.length} people in the room and your ties to them`
+        }
       >
-        {edges.map((e) => {
+        {shown.map((e) => {
           const from = positions[e.a]
           const to = positions[e.b]
           if (!from || !to) return null
@@ -175,7 +204,15 @@ export default function RoomGraph({ nodes, edges, focusTeam = null, meId = null 
           const dy = to.y - from.y
           const lit = hot !== null && touches(e, hot)
           const dim = (hot !== null && !lit) || (hot === null && !(inFocus(e.a) || inFocus(e.b)))
-          const kind = e.semantic ? 'rg-edge--sem' : e.weight >= 0.25 ? 'rg-edge--solid' : 'rg-edge--solid rg-edge--faint'
+          // dashed = suggested match; dotted = weak link; solid = connection,
+          // bold once it's a strong one
+          const kind = e.semantic
+            ? 'rg-edge--sem'
+            : e.weight >= 0.5
+              ? 'rg-edge--solid rg-edge--bold'
+              : e.weight >= 0.25
+                ? 'rg-edge--solid'
+                : 'rg-edge--weak'
           return (
             <div
               key={`${e.a}-${e.b}`}
@@ -187,7 +224,13 @@ export default function RoomGraph({ nodes, edges, focusTeam = null, meId = null 
                 width: pct(Math.hypot(dx, dy), W),
                 transform: `rotate(${(Math.atan2(dy, dx) * 180) / Math.PI}deg)`,
               }}
-            />
+            >
+              {lit && (
+                <span className="rg-edgelabel" style={{ transform: `translate(-50%, -50%) rotate(${-(Math.atan2(dy, dx) * 180) / Math.PI}deg)` }}>
+                  {Math.round(e.weight * 100)}%{e.semantic ? ' match' : ''}
+                </span>
+              )}
+            </div>
           )
         })}
 
@@ -198,8 +241,10 @@ export default function RoomGraph({ nodes, edges, focusTeam = null, meId = null 
           const dim =
             (hot !== null &&
               hot !== node.id &&
-              !edges.some((e) => touches(e, hot) && touches(e, node.id))) ||
+              !shown.some((e) => touches(e, hot) && touches(e, node.id))) ||
             (hot === null && !inFocus(node.id))
+          const myTie =
+            egoId != null && node.id !== egoId ? shown.find((e) => touches(e, node.id)) : null
           return (
             <button
               key={node.id}
@@ -228,7 +273,11 @@ export default function RoomGraph({ nodes, edges, focusTeam = null, meId = null 
                     animationDelay: `${index * 0.19}s`,
                   }}
                 >
-                  {initials(node.name)}
+                  {node.avatar_url ? (
+                    <img className="nw-node__img" src={assetUrl(node.avatar_url)} alt="" draggable="false" />
+                  ) : (
+                    initials(node.name)
+                  )}
                 </span>
               </span>
               <span className="nw-node__label">{node.id === meId ? 'You' : node.name.split(' ')[0]}</span>
@@ -240,8 +289,19 @@ export default function RoomGraph({ nodes, edges, focusTeam = null, meId = null 
                     : 'Profile pending'}
                 </span>
                 <span className="nw-node__tip-row">
-                  {degree[node.id] || 0} connection{(degree[node.id] || 0) === 1 ? '' : 's'} in this room
+                  {egoId == null
+                    ? `${degree[node.id] || 0} connection${(degree[node.id] || 0) === 1 ? '' : 's'} in this room`
+                    : node.id === egoId
+                      ? `${shown.length} tie${shown.length === 1 ? '' : 's'} in this room`
+                      : myTie
+                        ? myTie.semantic
+                          ? `${Math.round(myTie.weight * 100)}% expertise match with you`
+                          : `Connected to you · ${Math.round(myTie.weight * 100)}%`
+                        : 'No link with you yet'}
                 </span>
+                {egoId != null && myTie && !myTie.semantic && myTie.evidence && (
+                  <span className="nw-node__tip-row">{myTie.evidence}</span>
+                )}
               </span>
             </button>
           )
@@ -249,9 +309,21 @@ export default function RoomGraph({ nodes, edges, focusTeam = null, meId = null 
       </div>
 
       <ul className="rg-legend" aria-hidden="true">
-        <li><i className="rg-key rg-key--strong" />Connected</li>
-        <li><i className="rg-key rg-key--sem" />Suggested connection</li>
-        <li><i className="rg-key rg-key--ghost" />Profile pending</li>
+        {egoId != null ? (
+          <>
+            <li><i className="rg-key rg-key--bold" />Strong connection</li>
+            <li><i className="rg-key rg-key--strong" />Connection</li>
+            <li><i className="rg-key rg-key--weakdot" />Weak link</li>
+            <li><i className="rg-key rg-key--sem" />Suggested match</li>
+            <li><i className="rg-key rg-key--ghost" />Profile pending</li>
+          </>
+        ) : (
+          <>
+            <li><i className="rg-key rg-key--strong" />Connected</li>
+            <li><i className="rg-key rg-key--sem" />Suggested connection</li>
+            <li><i className="rg-key rg-key--ghost" />Profile pending</li>
+          </>
+        )}
       </ul>
     </div>
   )

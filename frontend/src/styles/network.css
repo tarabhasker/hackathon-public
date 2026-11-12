@@ -602,6 +602,27 @@
 
 /* --- Your events (aside panel under suggestions) ------------------------------ */
 .nw-events { display: flex; flex-direction: column; gap: 10px; }
+/* join-by-code box: the typed twin of scanning the QR */
+.nw-joincode {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.nw-joincode input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 9px 13px;
+  border: 1px solid var(--ds-line);
+  border-radius: 10px;
+  background: var(--ds-surface);
+  font: inherit;
+  font-size: 13.5px;
+  letter-spacing: 0.04em;
+  color: var(--secondary);
+}
+.nw-joincode input::placeholder { letter-spacing: normal; color: var(--secondary-muted); }
+.nw-joincode input:focus-visible { outline: 2px solid var(--primary); outline-offset: -1px; }
 .nw-events__group { display: flex; flex-direction: column; gap: 6px; }
 .nw-events__label { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--secondary-muted); margin-top: 4px; }
 

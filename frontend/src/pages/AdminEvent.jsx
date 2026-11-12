@@ -14,6 +14,20 @@ const nameOf = (m) => m.name || m.email
 
 const csvCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
 
+// The join code, one glyph per cell, so a room can read it off a screen
+function CodeCells({ code, big = false, onClick, label }) {
+  const Tag = onClick ? 'button' : 'div'
+  return (
+    <Tag
+      {...(onClick ? { type: 'button', onClick, title: 'Copy code' } : {})}
+      className={`ev-codecells ${big ? 'ev-codecells--big' : ''}`}
+      aria-label={label || `Event code ${code.split('').join(' ')}`}
+    >
+      {code.split('').map((ch, i) => <b key={i}>{ch}</b>)}
+    </Tag>
+  )
+}
+
 // Fullscreen QR for projecting in a room; the join count updates live behind it.
 function Present({ event, url, count, onClose }) {
   useEffect(() => {
@@ -31,6 +45,10 @@ function Present({ event, url, count, onClose }) {
         <QrCode value={url} size={size} label={`QR code to join ${event.name}`} />
       </div>
       <p className="present__hint">Scan to join &middot; {count} joined</p>
+      <div className="present__or" onClick={(e) => e.stopPropagation()}>
+        <span className="present__orlabel">or type this code under &ldquo;Join an event&rdquo;</span>
+        <CodeCells code={event.code} big />
+      </div>
       <code className="present__url">{url.replace(/^https?:\/\//, '')}</code>
       <span className="present__close">Click anywhere or press Esc to close</span>
     </div>
@@ -48,6 +66,7 @@ export default function AdminEvent() {
   const [presenting, setPresenting] = useState(false)
   const [busy, setBusy] = useState(null)
   const [copied, copy] = useCopied()
+  const [codeCopied, copyCode] = useCopied() // its own state, so the URL button's label stays honest
   const [focusTeam, setFocusTeam] = useState(null)
   const [domains, setDomains] = useState('')
   const qrBox = useRef(null)
@@ -263,10 +282,32 @@ export default function AdminEvent() {
             <Icon name="expand" size={16} /> Show full screen
           </Button>
 
+          <div className="ev-code">
+            <span className="ev-code__label">or type this code to join</span>
+            <CodeCells
+              code={event.code}
+              label={`Copy event code ${event.code}`}
+              onClick={async () => {
+                if (await copyCode(event.code)) toast.success(`Code ${event.code} copied.`)
+                else toast.error(`Couldn't reach the clipboard — the code is ${event.code}`)
+              }}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                if (await copyCode(event.code)) toast.success(`Code ${event.code} copied.`)
+                else toast.error(`Couldn't reach the clipboard — the code is ${event.code}`)
+              }}
+            >
+              {codeCopied ? 'Code copied' : 'Copy code'}
+            </Button>
+          </div>
+
           <div className="ev-qr__link">
             <input type="text" readOnly value={url.replace(/^https?:\/\//, '')} aria-label="Join link" onFocus={(e) => e.target.select()} />
-            <Button variant="outline" onClick={() => copy(url)} style={{ minWidth: 84 }}>
-              {copied ? 'Copied' : 'Copy'}
+            <Button variant="outline" onClick={() => copy(url)} style={{ minWidth: 96 }}>
+              {copied ? 'Link copied' : 'Copy link'}
             </Button>
           </div>
 

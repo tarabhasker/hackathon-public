@@ -364,6 +364,7 @@ def _event_payload(row) -> dict:
         "name": row.name,
         "description": row.description,
         "is_open": row.is_open,
+        "allowed_domains": row.allowed_domains,
         "created_at": row.created_at,
     }
 
@@ -386,7 +387,7 @@ def create_event(body: EventCreate, authorization: str | None = Header(default=N
                     text(
                         "INSERT INTO events (code, name, description, host_user_id) "
                         "VALUES (:c, :n, :d, :h) "
-                        "RETURNING id, code, name, description, is_open, created_at"
+                        "RETURNING id, code, name, description, is_open, allowed_domains, created_at"
                     ),
                     {"c": code, "n": name, "d": description, "h": admin_id},
                 ).one()
@@ -402,7 +403,7 @@ def list_events(authorization: str | None = Header(default=None)):
     with engine.connect() as conn:
         rows = conn.execute(
             text(
-                "SELECT e.id, e.code, e.name, e.description, e.is_open, e.created_at, "
+                "SELECT e.id, e.code, e.name, e.description, e.is_open, e.allowed_domains, e.created_at, "
                 "COUNT(m.id) AS member_count, MAX(m.joined_at) AS last_joined_at "
                 "FROM events e LEFT JOIN event_members m ON m.event_id = e.id "
                 "GROUP BY e.id ORDER BY e.created_at DESC"
@@ -447,7 +448,7 @@ def get_event(event_id: int, authorization: str | None = Header(default=None)):
     with engine.connect() as conn:
         event = conn.execute(
             text(
-                "SELECT id, code, name, description, is_open, created_at "
+                "SELECT id, code, name, description, is_open, allowed_domains, created_at "
                 "FROM events WHERE id = :id"
             ),
             {"id": event_id},
@@ -549,6 +550,35 @@ def event_graph(event_id: int, authorization: str | None = Header(default=None))
     return {"nodes": nodes, "edges": list(pairs.values())}
 
 
+
+class EventSettings(BaseModel):
+    allowed_domains: str | None = None
+
+
+@app.post("/api/admin/events/{event_id}/settings")
+def event_settings(event_id: int, body: EventSettings, authorization: str | None = Header(default=None)):
+    _require_admin(authorization)
+    domains = None
+    if body.allowed_domains:
+        parts = [
+            d.strip().lstrip("@").lower()
+            for d in body.allowed_domains.replace(";", ",").split(",")
+        ]
+        parts = [d for d in parts if d and "." in d]
+        domains = ",".join(dict.fromkeys(parts)) or None  # dedupe, keep order
+    with engine.begin() as conn:
+        row = conn.execute(
+            text(
+                "UPDATE events SET allowed_domains = :d WHERE id = :id "
+                "RETURNING id, code, name, description, is_open, allowed_domains, created_at"
+            ),
+            {"d": domains, "id": event_id},
+        ).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return _event_payload(row)
+
+
 @app.post("/api/admin/events/{event_id}/toggle-open")
 def toggle_event_open(event_id: int, authorization: str | None = Header(default=None)):
     _require_admin(authorization)
@@ -576,13 +606,13 @@ def public_event(code: str):
     """What the QR landing page shows before anyone signs in. No auth, no member data."""
     with engine.connect() as conn:
         row = conn.execute(
-            text("SELECT id, code, name, description, is_open, created_at FROM events WHERE code = :c"),
+            text("SELECT id, code, name, description, is_open, allowed_domains, created_at FROM events WHERE code = :c"),
             {"c": code.strip().lower()},
         ).first()
     if row is None:
         raise HTTPException(status_code=404, detail="This event link isn't valid")
     payload = _event_payload(row)
-    return {k: payload[k] for k in ("code", "name", "description", "is_open")}
+    return {k: payload[k] for k in ("code", "name", "description", "is_open", "allowed_domains")}
 
 
 @app.post("/api/events/{code}/join")
@@ -590,7 +620,7 @@ def join_event(code: str, authorization: str | None = Header(default=None)):
     user_id = _require_user(authorization)
     with engine.begin() as conn:
         event = conn.execute(
-            text("SELECT id, name, is_open FROM events WHERE code = :c"),
+            text("SELECT id, name, is_open, allowed_domains FROM events WHERE code = :c"),
             {"c": code.strip().lower()},
         ).first()
         if event is None:
@@ -603,6 +633,17 @@ def join_event(code: str, authorization: str | None = Header(default=None)):
             return {"event": event.name, "already_joined": True}
         if not event.is_open:
             raise HTTPException(status_code=403, detail=f"{event.name} is no longer accepting people")
+        if event.allowed_domains:
+            email = conn.execute(
+                text("SELECT email FROM users WHERE id = :id"), {"id": user_id}
+            ).scalar_one()
+            allowed = event.allowed_domains.split(",")
+            if email.rsplit("@", 1)[-1].lower() not in allowed:
+                pretty = " or ".join(f"@{d}" for d in allowed)
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"{event.name} is limited to {pretty} email addresses",
+                )
         conn.execute(
             text("INSERT INTO event_members (event_id, user_id) VALUES (:e, :u)"),
             {"e": event.id, "u": user_id},

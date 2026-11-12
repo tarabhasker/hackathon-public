@@ -51,6 +51,7 @@ const PATHS = {
   expand: <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />,
   trash: <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6" />,
   home: <path d="M4 10.5L12 4l8 6.5V20h-5.5v-5h-5v5H4z" />,
+  share: <path d="M12 14V3.5M8.5 6.5L12 3l3.5 3.5M7 10H5v10h14V10h-2" />,
 }
 
 export default function Icon({ name, size = 18, strokeWidth = 1.8, ...rest }) {

@@ -3,23 +3,14 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
 import RoomGraph from '../components/admin/RoomGraph'
 import { QrCode } from '../components/network/InvitePanel'
-import { Avatar, Badge, Button, Card, Chip, Eyebrow, Icon, Notice, Spinner, TextField, useToast } from '../components/ui'
+import { Avatar, Badge, Button, Card, Chip, Eyebrow, Icon, Spinner, TextField, useToast } from '../components/ui'
 import { useCopied } from '../hooks/useCopied'
 import { useCountUp } from '../hooks/useCountUp'
 import { joinUrl } from '../lib/events'
 
-const BASE_KEY = 'bff.publicUrl'
 const POLL_MS = 5000
 
 const nameOf = (m) => m.name || m.email
-
-function readBase() {
-  try {
-    return localStorage.getItem(BASE_KEY) || ''
-  } catch {
-    return ''
-  }
-}
 
 const csvCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
 
@@ -54,12 +45,17 @@ export default function AdminEvent() {
   const [graph, setGraph] = useState(null)
   const [missing, setMissing] = useState(false)
   const [live, setLive] = useState(true)
-  const [baseInput, setBaseInput] = useState(readBase)
   const [presenting, setPresenting] = useState(false)
   const [busy, setBusy] = useState(null)
   const [copied, copy] = useCopied()
   const [focusTeam, setFocusTeam] = useState(null)
+  const [domains, setDomains] = useState('')
+  const qrBox = useRef(null)
   const joinedCount = useCountUp(event?.members.length ?? 0)
+
+  useEffect(() => {
+    if (event) setDomains(event.allowed_domains || '')
+  }, [event?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const teams = graph ? [...new Set(graph.nodes.map((n) => n.org_unit).filter(Boolean))].sort() : []
   const nodeById = graph ? Object.fromEntries(graph.nodes.map((n) => [n.id, n])) : {}
@@ -115,17 +111,67 @@ export default function AdminEvent() {
     return () => clearInterval(timer)
   }, [load])
 
-  const base = (baseInput.trim() || window.location.origin).replace(/\/+$/, '')
-  const url = event ? joinUrl(base, event.code) : ''
-  const localOnly = /^https?:\/\/(localhost|127\.|0\.0\.0\.0)/i.test(base)
+  const url = event ? joinUrl(window.location.origin, event.code) : ''
 
-  function changeBase(value) {
-    setBaseInput(value)
+  async function shareLink() {
     try {
-      if (value.trim()) localStorage.setItem(BASE_KEY, value.trim())
-      else localStorage.removeItem(BASE_KEY)
-    } catch {
-      // storage unavailable: the address just won't be remembered
+      if (navigator.share) {
+        await navigator.share({ title: event.name, text: `Join ${event.name}`, url })
+        return
+      }
+    } catch (err) {
+      if (err.name === 'AbortError') return // they closed the share sheet
+    }
+    const ok = await copy(url)
+    if (ok) toast.success('Link copied — share it anywhere.')
+  }
+
+  function downloadPng() {
+    const svg = qrBox.current?.querySelector('svg')
+    if (!svg) return
+    const xml = new XMLSerializer()
+      .serializeToString(svg)
+      .replaceAll('var(--secondary)', '#1B1613')
+    const img = new Image()
+    img.onload = () => {
+      const SIZE = 640
+      const PAD = 48
+      const canvas = document.createElement('canvas')
+      canvas.width = SIZE
+      canvas.height = SIZE
+      const ctx = canvas.getContext('2d')
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, SIZE, SIZE)
+      ctx.drawImage(img, PAD, PAD, SIZE - 2 * PAD, SIZE - 2 * PAD)
+      canvas.toBlob((blob) => {
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(blob)
+        a.download = `${event.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'room'}-qr.png`
+        a.click()
+        URL.revokeObjectURL(a.href)
+      })
+      toast.success('QR code saved as a PNG.')
+    }
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml)
+  }
+
+  async function saveDomains() {
+    const next = domains.trim()
+    if ((event.allowed_domains || '') === next) return
+    try {
+      const updated = await api(`/api/admin/events/${id}/settings`, {
+        method: 'POST',
+        body: { allowed_domains: next || null },
+      })
+      setEvent((ev) => ({ ...ev, allowed_domains: updated.allowed_domains }))
+      setDomains(updated.allowed_domains || '')
+      toast.success(
+        updated.allowed_domains
+          ? `Only ${updated.allowed_domains.split(',').map((d) => '@' + d).join(', ')} emails can join now.`
+          : 'Anyone with the link can join now.',
+      )
+    } catch (err) {
+      toast.error(err.message)
     }
   }
 
@@ -201,11 +247,7 @@ export default function AdminEvent() {
           {event.description && <p className="ev-head__desc">{event.description}</p>}
         </div>
         <div className="ev-head__actions">
-          <Button variant="outline" disabled={busy !== null} onClick={toggleOpen}>
-            {busy === 'toggle' && <Spinner size={14} />}
-            {event.is_open ? 'Close event' : 'Reopen event'}
-          </Button>
-          <Button variant="outline" disabled={busy !== null} onClick={removeEvent} aria-label="Delete event">
+          <Button variant="outline" disabled={busy !== null} onClick={removeEvent} aria-label="Delete room">
             <Icon name="trash" size={16} />
           </Button>
         </div>
@@ -214,7 +256,7 @@ export default function AdminEvent() {
       <div className="ev-grid">
         <Card className="ev-qr">
           <Eyebrow>Scan to join</Eyebrow>
-          <div className="ev-qr__code">
+          <div className="ev-qr__code" ref={qrBox}>
             <QrCode value={url} size={156} label={`QR code to join ${event.name}`} />
           </div>
           <Button variant="primary" block onClick={() => setPresenting(true)}>
@@ -228,25 +270,44 @@ export default function AdminEvent() {
             </Button>
           </div>
 
-          <details className="ev-qr__settings">
-            <summary>
-              <Icon name="chevron" size={13} /> QR settings
-              {localOnly && <i className="ev-qr__flag" title="Phones can't open this address" />}
-            </summary>
+          <div className="ev-qr__actions">
+            <Button variant="outline" size="sm" onClick={shareLink}>
+              <Icon name="share" size={15} /> Share
+            </Button>
+            <Button variant="outline" size="sm" onClick={downloadPng}>
+              <Icon name="download" size={15} /> Save PNG
+            </Button>
+          </div>
+
+          <div className="ev-qr__group">
+            <span className="ev-qr__grouplabel">Who can join</span>
+            <div className="ev-switchrow">
+              <span className="ev-switchrow__text">
+                <b>Accepting new people</b>
+                <small>{event.is_open ? 'Scans let newcomers in' : 'New scans are turned away'}</small>
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={event.is_open}
+                aria-label="Accepting new people"
+                className={`ui-switch ${event.is_open ? 'ui-switch--on' : ''}`}
+                disabled={busy !== null}
+                onClick={toggleOpen}
+              >
+                <i />
+              </button>
+            </div>
             <TextField
-              label="Site address in the QR"
-              value={baseInput}
-              onChange={(e) => changeBase(e.target.value)}
-              placeholder={window.location.origin}
-              hint="Where people open the app. Leave blank to use this browser's address."
+              label="Limit to email domains"
+              value={domains}
+              onChange={(e) => setDomains(e.target.value)}
+              onBlur={saveDomains}
+              onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
+              placeholder="e.g. gamuda.tech, gmail.com"
+              hint="Comma separated. Blank = anyone with the link."
             />
-            {localOnly && (
-              <Notice tone="warn">
-                Phones can't open {new URL(base).host}. Paste your deployed URL (or your laptop's network
-                address) above so the QR works on other devices.
-              </Notice>
-            )}
-          </details>
+          </div>
         </Card>
 
         <Card className="ev-people">

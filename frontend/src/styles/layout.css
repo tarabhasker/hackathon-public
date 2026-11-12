@@ -970,3 +970,52 @@
 }
 .ev-qr .ui-input::placeholder { color: color-mix(in srgb, var(--secondary-ink) 40%, transparent); }
 .ev-qr .ui-input:focus { border-color: var(--primary); }
+
+/* --- QR card: share row + who-can-join ----------------------------------------------- */
+.ev-qr__actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ev-qr__actions .ui-btn { gap: 6px; }
+
+.ev-qr__group {
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ev-qr__grouplabel {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--secondary-ink) 60%, transparent);
+}
+
+.ev-switchrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ev-switchrow__text { display: flex; flex-direction: column; min-width: 0; }
+.ev-switchrow__text b { font-size: 13px; font-weight: 600; }
+.ev-switchrow__text small { font-size: 11.5px; color: color-mix(in srgb, var(--secondary-ink) 55%, transparent); }
+
+.ui-switch {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 22px;
+  padding: 2px;
+  border: 0;
+  border-radius: var(--ds-radius-pill);
+  background: rgba(255, 255, 255, 0.22);
+  display: flex;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.ui-switch i {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s ease;
+}
+.ui-switch--on { background: var(--ds-ok); }
+.ui-switch--on i { transform: translateX(18px); }
+.ui-switch:disabled { opacity: 0.55; cursor: default; }
+.ui-switch:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }

@@ -58,7 +58,12 @@ export default function JoinEvent() {
     return (
       <AuthLayout
         title={`Join ${event.name}`}
-        subtitle={event.description || 'Create an account or sign in to join this event.'}
+        subtitle={
+          (event.description || 'Create an account or sign in to join this event.') +
+          (event.allowed_domains
+            ? ` Use your ${event.allowed_domains.split(',').map((d) => '@' + d).join(' or ')} email.`
+            : '')
+        }
       >
         <div className="form">
           <Button to="/register" variant="primary" size="lg" block>Create an account</Button>
@@ -72,7 +77,7 @@ export default function JoinEvent() {
     return (
       <AuthLayout
         title={event ? `${event.name} is closed` : 'This event is closed'}
-        subtitle="The host has stopped accepting new people. Ask them to reopen it."
+        subtitle={message || 'The host has stopped accepting new people. Ask them to reopen it.'}
       >
         <Button to="/" variant="outline" size="lg" block>Go to the app</Button>
       </AuthLayout>

@@ -10,6 +10,7 @@ import { Register, SignIn } from './pages/AuthForm'
 import JoinEvent from './pages/JoinEvent'
 import Network from './pages/Network'
 import Quiz from './pages/Quiz'
+import Rooms from './pages/Rooms'
 import Setup from './pages/Setup'
 
 // Flow: register / sign in -> first-time setup -> main UI (network).
@@ -31,6 +32,7 @@ export default function App() {
             <Route element={<RequireAdmin />}>
               <Route element={<AppShell />}>
                 <Route path="/admin" element={<Admin />} />
+                <Route path="/admin/rooms" element={<Rooms />} />
                 <Route path="/admin/events/:id" element={<AdminEvent />} />
               </Route>
             </Route>

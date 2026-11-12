@@ -5,9 +5,14 @@ import { useAuth } from '../../hooks/useAuth'
 import { Avatar, Icon, Logo } from '../ui'
 
 // Single source of truth for navigation: used by the sidebar and the mobile tab bar.
-const NAV = [
+// Admins see only their hosting tools; members see the network app.
+const MEMBER_NAV = [
   { to: '/', label: 'Network', mobileLabel: 'Find', icon: 'network', mobileIcon: 'search', end: true },
   { to: '/quiz', label: 'Quiz', icon: 'spark' },
+]
+const ADMIN_NAV = [
+  { to: '/admin', label: 'Home', icon: 'home', end: true },
+  { to: '/admin/rooms', label: 'Rooms', icon: 'calendar' },
 ]
 
 const SIDEBAR_KEY = 'bff.sidebar'
@@ -51,6 +56,7 @@ function useSidebar() {
 
 function Sidebar({ collapsed, onToggle }) {
   const { user, signOut } = useAuth()
+  const nav = user.is_admin ? ADMIN_NAV : MEMBER_NAV
   // In the collapsed rail the text is hidden, so give every control a tooltip
   const tip = (label) => (collapsed ? { title: label } : {})
 
@@ -70,22 +76,18 @@ function Sidebar({ collapsed, onToggle }) {
         </button>
       </div>
 
-      {NAV.map((item) => (
+      {nav.map((item) => (
         <NavLink key={item.to} to={item.to} end={item.end} className="shell-nav__link" {...tip(item.label)}>
           <Icon name={item.icon} />
           <span className="shell-nav__label">{item.label}</span>
         </NavLink>
       ))}
-      {user.is_admin && (
-        <NavLink to="/admin" className="shell-nav__link" {...tip('Admin')}>
-          <Icon name="calendar" />
-          <span className="shell-nav__label">Admin</span>
-        </NavLink>
+      {!user.is_admin && (
+        <a className="shell-nav__link" href={`${API_BASE}/docs`} {...tip('API docs')}>
+          <Icon name="users" />
+          <span className="shell-nav__label">API docs</span>
+        </a>
       )}
-      <a className="shell-nav__link" href={`${API_BASE}/docs`} {...tip('API docs')}>
-        <Icon name="users" />
-        <span className="shell-nav__label">API docs</span>
-      </a>
       <div className="shell-nav__spacer" />
       <div className="shell-nav__me" {...tip(user.person?.name || user.email)}>
         <Avatar name={user.person?.name || user.email} size={32} tone="secondary" />
@@ -103,10 +105,11 @@ function Sidebar({ collapsed, onToggle }) {
 }
 
 function MobileNav() {
-  const { signOut } = useAuth()
+  const { user, signOut } = useAuth()
+  const nav = user.is_admin ? ADMIN_NAV : MEMBER_NAV
   return (
     <nav className="shell-tabs" aria-label="Main">
-      {NAV.map((item) => (
+      {nav.map((item) => (
         <NavLink key={item.to} to={item.to} end={item.end} className="shell-tabs__link">
           <Icon name={item.mobileIcon || item.icon} size={20} />
           {item.mobileLabel || item.label}

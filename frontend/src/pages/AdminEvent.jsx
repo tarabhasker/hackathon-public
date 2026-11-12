@@ -144,8 +144,8 @@ export default function AdminEvent() {
     return (
       <div className="admin">
         <Card className="admin-empty">
-          <span>That event doesn't exist (it may have been deleted).</span>
-          <Button to="/admin" variant="outline">Back to admin</Button>
+          <span>That room doesn't exist (it may have been deleted).</span>
+          <Button to="/admin/rooms" variant="outline">Back to rooms</Button>
         </Card>
       </div>
     )
@@ -161,8 +161,8 @@ export default function AdminEvent() {
 
   return (
     <div className="admin">
-      <Link to="/admin" className="ev-back">
-        <Icon name="chevron" size={14} style={{ transform: 'rotate(180deg)' }} /> All events
+      <Link to="/admin/rooms" className="ev-back">
+        <Icon name="chevron" size={14} style={{ transform: 'rotate(180deg)' }} /> All rooms
       </Link>
 
       <header className="ev-head">

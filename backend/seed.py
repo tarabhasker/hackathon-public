@@ -380,6 +380,31 @@ def main():
         )
         conn.commit()
 
+        # Wiping synthetic people cascades away real users' edges to them, so
+        # re-attach each real user to a few synthetic people. Otherwise the
+        # logged-in user sits alone in the network view.
+        real_ids = conn.execute(
+            text("SELECT id FROM people WHERE is_real = true ORDER BY id")
+        ).scalars().all()
+        synthetic_ids = list(id_map.values())
+        for rid in real_ids:
+            for other in rng.sample(synthetic_ids, k=min(6, len(synthetic_ids))):
+                conn.execute(
+                    text(
+                        "INSERT INTO edges (src, dst, type, weight, started_at, ended_at, evidence) "
+                        "VALUES (:a, :b, 'declared', :w, :s, :e, 'declared connection (seeded)') "
+                        "ON CONFLICT (src, dst, type) DO NOTHING"
+                    ),
+                    {
+                        "a": min(rid, other), "b": max(rid, other),
+                        "w": round(rng.uniform(0.4, 0.7), 3),
+                        "s": dt.date(THIS_YEAR - 2, 1, 1), "e": dt.date(THIS_YEAR, 1, 1),
+                    },
+                )
+        conn.commit()
+        if real_ids:
+            print(f"Linked {len(real_ids)} real user(s) to synthetic people")
+
         counts = conn.execute(text(
             "SELECT (SELECT COUNT(*) FROM people) AS people, "
             "(SELECT COUNT(*) FROM facets) AS facets, "

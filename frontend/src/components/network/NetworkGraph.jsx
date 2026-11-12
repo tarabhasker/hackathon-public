@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
 import { GRAPH_H, GRAPH_W, initials, layoutNodes } from '../../lib/network'
 
-// Decorative fills for people who aren't on the highlighted path
-const PASTELS = ['#FBE3DF', '#FFF1C9', '#DDEFE3', '#DCE8F7', '#EDE3F7', '#FDE7D2']
+// Fills for people who aren't on the highlighted path (--avatar-1..6 in tokens.css)
+const AVATAR_FILLS = 6
 
 const pct = (value, total) => `${(value / total) * 100}%`
 
@@ -37,7 +37,7 @@ function Node({ node, index, at, role, onSelect }) {
       type="button"
       className={`nw-node nw-node--${role} ${!onPath && node.depth >= 2 ? 'nw-node--far' : ''}`}
       onClick={() => role !== 'you' && onSelect(node)}
-      aria-label={`${node.name}${node.title ? `, ${node.title}` : ''}`}
+      aria-label={[node.name, node.title, node.company].filter(Boolean).join(', ')}
       aria-pressed={role === 'target'}
       style={{
         left: pct(at.x, GRAPH_W),
@@ -52,8 +52,8 @@ function Node({ node, index, at, role, onSelect }) {
           style={{
             width: size,
             height: size,
-            fontSize: role === 'you' ? 13 : node.depth === 1 ? 12 : 11,
-            background: role === 'other' ? PASTELS[index % PASTELS.length] : undefined,
+            fontSize: role === 'you' ? 14 : node.depth === 1 ? 13 : 12,
+            background: role === 'other' ? `var(--avatar-${(index % AVATAR_FILLS) + 1})` : undefined,
             animationDuration: `${2.8 + (index % 4) * 0.4}s`,
             animationDelay: `${index * 0.23}s`,
           }}
@@ -62,6 +62,11 @@ function Node({ node, index, at, role, onSelect }) {
         </span>
       </span>
       <span className="nw-node__label">{role === 'you' ? 'You' : node.name}</span>
+      <span role="tooltip" className={`nw-node__tip ${at.y < GRAPH_H * 0.3 ? 'nw-node__tip--below' : ''}`}>
+        <span className="nw-node__tip-name">{node.name}</span>
+        <span className="nw-node__tip-row">{node.title || 'Role not listed'}</span>
+        <span className="nw-node__tip-row">{node.company || 'Company not listed'}</span>
+      </span>
     </button>
   )
 }

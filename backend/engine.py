@@ -237,7 +237,16 @@ def network(conn, requester_id: int, focus_id: int | None = None) -> dict:
     people = {
         r.id: r
         for r in conn.execute(
-            text("SELECT id, name, title, org_unit, is_real FROM people WHERE id = ANY(:ids)"),
+            text(
+                "SELECT p.id, p.name, p.title, p.org_unit, p.is_real, cur.org AS company "
+                "FROM people p "
+                "LEFT JOIN LATERAL ("
+                "  SELECT org FROM positions WHERE person_id = p.id "
+                "  ORDER BY (ended_year IS NULL) DESC, COALESCE(ended_year, 9999) DESC, "
+                "           started_year DESC NULLS LAST LIMIT 1"
+                ") cur ON true "
+                "WHERE p.id = ANY(:ids)"
+            ),
             {"ids": list(chosen)},
         )
     }
@@ -253,6 +262,7 @@ def network(conn, requester_id: int, focus_id: int | None = None) -> dict:
                 "name": person.name,
                 "title": person.title,
                 "org_unit": person.org_unit,
+                "company": person.company,
                 "is_real": person.is_real,
                 "depth": len(p) - 1,
                 "via": p[-2] if len(p) > 1 else None,
@@ -277,8 +287,7 @@ def network(conn, requester_id: int, focus_id: int | None = None) -> dict:
             "b": b,
             "weight": round(w, 3),
             "weak": w < WEAK_TIE,
-            "evidence": evidence.get((min(a, b), max(a, b)), ""),
-        }
+            "evidence": evidence.get((min(a, b), max(a, b)), ""),        }
 
     # Every strongest-path link, plus only the few strongest cross-links:
     # drawing them all turns the graph into a hairball.

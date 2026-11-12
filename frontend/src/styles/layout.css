@@ -908,14 +908,16 @@
 .rg-key--ghost { width: 10px; height: 10px; border: 1.5px dashed var(--ds-line-strong); border-radius: 50%; }
 
 /* room graph: ties must be readable at a glance (override the faint nw defaults) */
-.rg .nw-edge--strong {
+/* a real connection is ALWAYS a solid line; weight only changes its presence */
+.rg .rg-edge--solid {
   height: 2px;
   margin-top: -1px;
-  background: color-mix(in srgb, var(--secondary) 34%, transparent);
+  background: color-mix(in srgb, var(--secondary) 46%, transparent);
   border-radius: 1px;
 }
-.rg .nw-edge--weak {
-  border-top: 1.5px dashed color-mix(in srgb, var(--secondary) 30%, transparent);
+.rg .rg-edge--faint {
+  height: 1.5px;
+  background: color-mix(in srgb, var(--secondary) 26%, transparent);
 }
 .rg .rg-edge--sem {
   border-top: 2px dashed color-mix(in srgb, var(--primary) 72%, transparent);

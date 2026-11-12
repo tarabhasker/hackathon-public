@@ -175,7 +175,7 @@ export default function RoomGraph({ nodes, edges, focusTeam = null }) {
           const dy = to.y - from.y
           const lit = hot !== null && touches(e, hot)
           const dim = (hot !== null && !lit) || (hot === null && !(inFocus(e.a) || inFocus(e.b)))
-          const kind = e.semantic ? 'rg-edge--sem' : e.weight >= 0.3 ? 'nw-edge--strong' : 'nw-edge--weak'
+          const kind = e.semantic ? 'rg-edge--sem' : e.weight >= 0.25 ? 'rg-edge--solid' : 'rg-edge--solid rg-edge--faint'
           return (
             <div
               key={`${e.a}-${e.b}`}

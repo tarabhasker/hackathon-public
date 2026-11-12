@@ -17,6 +17,11 @@ THIS_YEAR = 2026
 NO_PATH_STRENGTH = 0.02  # floor so unreachable people still rank, labeled "cold"
 
 
+def avatar_url(key: str | None) -> str | None:
+    """Public path of a person's photo, or None if they haven't uploaded one."""
+    return f"/api/avatars/{key}" if key else None
+
+
 # --- Graph --------------------------------------------------------------------
 
 def load_graph(conn) -> nx.Graph:
@@ -108,7 +113,7 @@ def search(conn, query: str, requester_id: int, limit: int = 5) -> list[dict]:
         r.id: dict(r._mapping)
         for r in conn.execute(
             text(
-                "SELECT id, name, title, org_unit, opt_in, is_real "
+                "SELECT id, name, title, org_unit, opt_in, is_real, avatar_key "
                 "FROM people WHERE id = ANY(:ids)"
             ),
             {"ids": list(ids)},
@@ -155,7 +160,10 @@ def search(conn, query: str, requester_id: int, limit: int = 5) -> list[dict]:
         )
         results.append(
             {
-                "person": {k: person[k] for k in ("id", "name", "title", "org_unit", "is_real")},
+                "person": {
+                    **{k: person[k] for k in ("id", "name", "title", "org_unit", "is_real")},
+                    "avatar_url": avatar_url(person["avatar_key"]),
+                },
                 "score": round(score, 4),
                 "relevance": round(c["relevance"], 3),
                 "path_strength": round(strength, 3),
@@ -238,7 +246,7 @@ def network(conn, requester_id: int, focus_id: int | None = None) -> dict:
         r.id: r
         for r in conn.execute(
             text(
-                "SELECT p.id, p.name, p.title, p.org_unit, p.is_real, cur.org AS company "
+                "SELECT p.id, p.name, p.title, p.org_unit, p.is_real, p.avatar_key, cur.org AS company "
                 "FROM people p "
                 "LEFT JOIN LATERAL ("
                 "  SELECT org FROM positions WHERE person_id = p.id "
@@ -264,6 +272,7 @@ def network(conn, requester_id: int, focus_id: int | None = None) -> dict:
                 "org_unit": person.org_unit,
                 "company": person.company,
                 "is_real": person.is_real,
+                "avatar_url": avatar_url(person.avatar_key),
                 "depth": len(p) - 1,
                 "via": p[-2] if len(p) > 1 else None,
                 "strength": round(strength(n), 3) if n != requester_id else 1.0,

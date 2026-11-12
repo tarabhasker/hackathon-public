@@ -35,6 +35,20 @@ const PATHS = {
   logout: <path d="M10 4H5v16h5M15 8l4 4-4 4M19 12H9" />,
   check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
   upload: <path d="M12 16V4M7 9l5-5 5 5M4 20h16" />,
+  user: (
+    <>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4.5 20.5c1-4 4-6 7.5-6s6.5 2 7.5 6" />
+    </>
+  ),
+  back: <path d="M15 6l-6 6 6 6" />,
+  pencil: <path d="M4 20l1-4.5L16.5 4 20 7.5 8.5 19zM14 6.5l3.5 3.5" />,
+  camera: (
+    <>
+      <path d="M4 8h3l1.5-2.5h7L17 8h3v11H4z" />
+      <circle cx="12" cy="13" r="3.5" />
+    </>
+  ),
 }
 
 export default function Icon({ name, size = 18, strokeWidth = 1.8, ...rest }) {

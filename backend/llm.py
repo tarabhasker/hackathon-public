@@ -7,8 +7,17 @@ Everything degrades gracefully when GOOGLE_API_KEY is absent:
 import json
 import os
 
-EMBED_MODEL = "text-embedding-004"
-GEN_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+EMBED_MODEL = os.environ.get("GEMINI_EMBED_MODEL", "gemini-embedding-001")
+EMBED_DIM = 768  # must match vector(768) in the facets schema
+GEN_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
+# Tried in order when the preferred model is overloaded (503) or retired (404)
+GEN_FALLBACKS = [
+    GEN_MODEL,
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+]
 
 
 class LLMUnavailable(Exception):
@@ -20,7 +29,32 @@ def _client():
     if not api_key:
         return None
     from google import genai
-    return genai.Client(api_key=api_key)
+    # per-request cap so an overloaded model fails over instead of hanging
+    return genai.Client(api_key=api_key, http_options={"timeout": 25_000})
+
+
+def _generate(client, contents, config=None):
+    """generate_content with model fallbacks for overload/retirement errors."""
+    from google.genai import errors
+
+    last = None
+    for model in GEN_FALLBACKS:
+        try:
+            return client.models.generate_content(
+                model=model, contents=contents, config=config
+            )
+        except errors.APIError as e:
+            last = e
+            if getattr(e, "code", None) in (404, 429, 503, 504):
+                continue  # try the next model
+            raise
+        except Exception as e:
+            # timeouts (overloaded model) fall through to the next model
+            name = type(e).__name__.lower()
+            if "timeout" not in name and "timeout" not in str(e).lower():
+                raise
+            last = e
+    raise last
 
 
 def embed_texts(texts: list[str]) -> list[list[float]] | None:
@@ -28,7 +62,13 @@ def embed_texts(texts: list[str]) -> list[list[float]] | None:
     client = _client()
     if client is None:
         return None
-    result = client.models.embed_content(model=EMBED_MODEL, contents=texts)
+    from google.genai import types
+
+    result = client.models.embed_content(
+        model=EMBED_MODEL,
+        contents=texts,
+        config=types.EmbedContentConfig(output_dimensionality=EMBED_DIM),
+    )
     return [list(e.values) for e in result.embeddings]
 
 
@@ -44,20 +84,26 @@ Return ONLY a JSON object with exactly these keys:
 - ask: string (one sentence: what they likely want to learn or need help with, inferred)
 - offer: string (one sentence: what they can help others with)
 - summary: string (2 sentences describing their expertise)
-
-CV text:
 """
 
 
-def parse_cv(raw_text: str) -> dict:
+def parse_cv(raw_text: str | None = None, pdf_bytes: bytes | None = None) -> dict:
+    """Parse a CV from extracted text, or from the PDF itself (scanned/image CVs)."""
     client = _client()
     if client is None:
         raise LLMUnavailable("GOOGLE_API_KEY is not set in backend/.env")
-    response = client.models.generate_content(
-        model=GEN_MODEL,
-        contents=CV_PROMPT + raw_text[:30000],
-        config={"response_mime_type": "application/json"},
-    )
+
+    if pdf_bytes is not None:
+        from google.genai import types
+
+        contents = [
+            types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
+            CV_PROMPT + "\nThe CV is the attached document.",
+        ]
+    else:
+        contents = CV_PROMPT + "\nCV text:\n" + raw_text[:30000]
+
+    response = _generate(client, contents, config={"response_mime_type": "application/json"})
     return json.loads(response.text)
 
 
@@ -67,11 +113,9 @@ def draft_why(query: str, person_summary: str, path_names: list[str]) -> str | N
     if client is None:
         return None
     via = " -> ".join(path_names) if path_names else "a direct connection"
-    response = client.models.generate_content(
-        model=GEN_MODEL,
-        contents=(
-            "In one short sentence (max 20 words), explain why this person fits the ask "
-            f"and mention the intro path.\nAsk: {query}\nPerson: {person_summary}\nPath: {via}"
-        ),
+    response = _generate(
+        client,
+        "In one short sentence (max 20 words), explain why this person fits the ask "
+        f"and mention the intro path.\nAsk: {query}\nPerson: {person_summary}\nPath: {via}",
     )
     return response.text.strip()

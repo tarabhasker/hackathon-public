@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { api } from '../api'
 
 // Debounced semantic search for "who can help with <query>".
+// Searches as the signed-in person (the backend reads it from the token).
 // results: null while idle (empty query), else [{person, hops, why, ...}].
-export function usePeopleSearch(query, meId, { limit = 5, delay = 350 } = {}) {
+export function usePeopleSearch(query, { limit = 5, delay = 350 } = {}) {
   const [results, setResults] = useState(null)
   const [searching, setSearching] = useState(false)
   const [error, setError] = useState(null)
@@ -19,7 +20,7 @@ export function usePeopleSearch(query, meId, { limit = 5, delay = 350 } = {}) {
     let live = true
     setSearching(true)
     const timer = setTimeout(() => {
-      api('/api/search', { method: 'POST', body: { query: q, requester_id: meId, limit } })
+      api('/api/search', { method: 'POST', body: { query: q, limit } })
         .then((data) => {
           if (!live) return
           setResults(data.results)
@@ -32,7 +33,7 @@ export function usePeopleSearch(query, meId, { limit = 5, delay = 350 } = {}) {
       live = false
       clearTimeout(timer)
     }
-  }, [query, meId, limit, delay])
+  }, [query, limit, delay])
 
   return { results, searching, error }
 }

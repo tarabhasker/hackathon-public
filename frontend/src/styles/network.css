@@ -1,11 +1,6 @@
 /* Network page (components/network + pages/Network). */
 
-@keyframes nw-bob { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-5px) rotate(2deg); } }
 @keyframes nw-pulse { 0% { transform: scale(1); opacity: 0.55; } 100% { transform: scale(2.1); opacity: 0; } }
-@keyframes nw-spin { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(360deg); } }
-@keyframes nw-spin-rev { from { transform: translate(-50%, -50%) rotate(360deg); } to { transform: translate(-50%, -50%) rotate(0deg); } }
-@keyframes nw-flow { from { background-position: 0 0; } to { background-position: 14px 0; } }
-@keyframes nw-travel { 0% { left: 0%; opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { left: 100%; opacity: 0; } }
 @keyframes nw-fadein { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
 /* --- Page layout ------------------------------------------------------------ */
@@ -28,6 +23,32 @@
 .nw-head h1 { margin: 0 0 2px; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; }
 .nw-head span { font-size: 15px; color: var(--secondary-muted); }
 .nw-zoom { display: flex; gap: 6px; }
+/* 2D / 3D switch: a small pill with two segments */
+.nw-viewtoggle {
+  display: inline-flex;
+  margin-right: 6px;
+  padding: 3px;
+  border: 1px solid var(--ds-line);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface);
+}
+.nw-viewtoggle__btn {
+  min-width: 44px;
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--ds-radius-pill);
+  background: transparent;
+  color: var(--secondary-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.nw-viewtoggle__btn:hover { color: var(--secondary); }
+.nw-viewtoggle__btn[aria-pressed='true'] { background: var(--secondary); color: var(--secondary-ink); }
+.nw-viewtoggle__btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
 .nw-aside {
   flex: 0 0 360px;             /* fixed width */
@@ -71,40 +92,28 @@
   transition: transform 0.25s ease;
 }
 
-.nw-ring { position: absolute; left: 50%; top: 50%; border-radius: 50%; }
-.nw-ring--inner { width: 36.84%; height: 43.75%; border: 1.5px dashed var(--ds-line-strong); animation: nw-spin 60s linear infinite; }
-.nw-ring--outer { width: 65.79%; height: 78.13%; border: 1.5px dashed var(--ds-line); animation: nw-spin-rev 90s linear infinite; }
-
-/* Edges are thin boxes rotated around their left end */
-.nw-edge { position: absolute; transform-origin: 0 50%; }
-.nw-edge--strong { height: 1.5px; margin-top: -0.75px; background: var(--ds-line-strong); }
-.nw-edge--weak { height: 0; border-top: 1.5px dashed var(--ds-line-strong); }
-.nw-edge--path {
-  height: 3px;
-  margin-top: -1.5px;
-  z-index: 1;
-  background-image: repeating-linear-gradient(
-    90deg,
-    var(--primary) 0 8px,
-    color-mix(in srgb, var(--primary) 25%, transparent) 8px 14px
-  );
-  animation: nw-flow 0.7s linear infinite;
-}
-.nw-edge__dot {
+/* Links and orbit rings are painted on this canvas each frame (NetworkGraph.jsx) */
+.nw-graph__links { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.nw-graph-fit { user-select: none; }
+.nw-graph-fit--3d { cursor: grab; touch-action: none; }
+.nw-graph-fit.is-dragging { cursor: grabbing; }
+.nw-graph-fit.is-dragging .nw-node { pointer-events: none; }
+.nw-graph__hint {
   position: absolute;
-  top: -3.5px;
-  width: 10px;
-  height: 10px;
-  margin-left: -5px;
-  border-radius: 999px;
-  background: var(--primary);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 18%, transparent);
-  animation: nw-travel 1.8s linear infinite;
+  right: 4px;
+  top: -26px;
+  font-size: 13px;
+  color: var(--secondary-muted);
+  pointer-events: none;
 }
+
 /* Nodes */
 .nw-node {
   position: absolute;
+  left: 0;
+  top: 0;
   z-index: 2;
+  will-change: transform; /* moved and scaled every frame by the 3D view */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -116,38 +125,117 @@
   cursor: pointer;
 }
 .nw-node--you { cursor: default; }
-.nw-node--far { opacity: 0.7; }
 .nw-node--you, .nw-node--target, .nw-node--path { z-index: 4; }
 
 .nw-node__avwrap { position: relative; display: flex; align-items: center; justify-content: center; }
+/* Each person is a sphere: a base colour (--planet), drifting cloud bands,
+   and a shade layer whose bright spot (--lx/--ly) is aimed at the sun. */
 .nw-node__av {
+  position: relative;
   box-sizing: border-box;
   border-radius: 999px;
-  border: 2px solid var(--secondary);
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--planet, var(--planet-1));
   color: var(--secondary);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
   letter-spacing: 0.02em;
+  box-shadow: 0 6px 14px -6px rgba(15, 40, 38, 0.45);
   transition: box-shadow 0.2s;
-  animation: nw-bob 3s ease-in-out infinite;
 }
-.nw-node--you .nw-node__av { background: var(--secondary); color: var(--secondary-ink); border: 3px solid var(--secondary); }
-.nw-node--target .nw-node__av { background: var(--primary); color: var(--primary-ink); border: 3px solid var(--secondary); }
-.nw-node--path .nw-node__av { background: var(--primary-soft); color: var(--primary-soft-ink); border: 3px solid var(--primary); }
-.nw-node:not(.nw-node--you):hover .nw-node__av { box-shadow: 0 0 0 5px var(--ds-surface), 0 0 0 8px var(--secondary); }
+.nw-node__img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+/* initials sit above the shading so they stay readable on the night side */
+.nw-node__initials { position: relative; z-index: 3; text-shadow: 0 0 6px rgba(255, 255, 255, 0.9), 0 0 2px rgba(255, 255, 255, 0.9); }
+
+@keyframes nw-bands { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.nw-node__bands {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 200%;
+  height: 100%;
+  background:
+    radial-gradient(ellipse 14% 9% at 12% 30%, rgba(255, 255, 255, 0.55), transparent 70%),
+    radial-gradient(ellipse 18% 8% at 34% 68%, rgba(20, 50, 46, 0.2), transparent 70%),
+    radial-gradient(ellipse 12% 10% at 62% 30%, rgba(255, 255, 255, 0.55), transparent 70%),
+    radial-gradient(ellipse 18% 8% at 84% 68%, rgba(20, 50, 46, 0.2), transparent 70%),
+    repeating-linear-gradient(
+      180deg,
+      transparent 0 16%,
+      rgba(20, 50, 46, 0.1) 16% 24%,
+      transparent 24% 46%,
+      rgba(255, 255, 255, 0.3) 46% 54%
+    );
+  animation: nw-bands 9s linear infinite;
+  animation-play-state: paused; /* drifts only while hovered */
+}
+.nw-node__shade {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at var(--lx, 32%) var(--ly, 30%), rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0.2) 18%, transparent 42%),
+    radial-gradient(circle at calc(100% - var(--lx, 32%)) calc(100% - var(--ly, 30%)), rgba(30, 69, 66, 0.6) 0%, rgba(30, 69, 66, 0.22) 36%, transparent 64%);
+  box-shadow: inset 0 0 0 1px rgba(15, 40, 38, 0.12);
+}
+
+/* Moons only show their name when they are on your path or hovered (the tooltip covers the rest) */
+.nw-node--moon.nw-node--other .nw-node__label { display: none; }
+.nw-node--back .nw-node__label { opacity: 0; }
+.nw-node__label { transition: opacity 0.3s ease; }
+
+/* The sun: you */
+.nw-node--you .nw-node__av {
+  --planet: var(--secondary);
+  color: var(--secondary-ink);
+  box-shadow:
+    0 0 0 6px color-mix(in srgb, var(--avatar-3) 35%, transparent),
+    0 0 44px 10px color-mix(in srgb, var(--avatar-3) 70%, transparent);
+}
+.nw-node--you .nw-node__initials { text-shadow: none; }
+.nw-node--you .nw-node__shade {
+  background: radial-gradient(circle at 36% 30%, rgba(255, 255, 255, 0.45) 0%, transparent 52%);
+}
+/* On your path: tinted planets with a ring */
+.nw-node--target .nw-node__av {
+  --planet: var(--primary);
+  color: var(--primary-ink);
+  box-shadow: 0 0 0 3px var(--ds-surface), 0 0 0 6px var(--primary), 0 8px 18px -6px rgba(15, 40, 38, 0.5);
+}
+.nw-node--target .nw-node__initials { text-shadow: none; }
+.nw-node--path .nw-node__av {
+  --planet: var(--primary-soft);
+  color: var(--primary-soft-ink);
+  box-shadow: 0 0 0 2px var(--ds-surface), 0 0 0 4.5px var(--primary), 0 6px 14px -6px rgba(15, 40, 38, 0.45);
+}
+.nw-node:not(.nw-node--you):hover .nw-node__av { box-shadow: 0 0 0 4px var(--ds-surface), 0 0 0 7px var(--secondary); }
+
+/* Everything holds still; hovering (or keyboard focus) brings a person to life:
+   the sphere swells and bobs, its cloud bands drift, and a ring pulses out. */
+@keyframes nw-hover-bob {
+  0%, 100% { transform: translateY(0) scale(1.12); }
+  50% { transform: translateY(-4px) scale(1.16); }
+}
+.nw-node__avwrap { transition: transform 0.25s ease; }
+.nw-node:hover .nw-node__avwrap,
+.nw-node:focus-visible .nw-node__avwrap { animation: nw-hover-bob 1.6s ease-in-out infinite; }
+.nw-node:hover .nw-node__bands,
+.nw-node:focus-visible .nw-node__bands { animation-play-state: running; animation-duration: 3s !important; }
+.nw-node:hover .nw-node__pulse,
+.nw-node:focus-visible .nw-node__pulse { opacity: 1; animation: nw-pulse 1.6s ease-out infinite; }
 .nw-node:focus-visible { outline: none; }
 .nw-node:focus-visible .nw-node__av { outline: 2px solid var(--primary); outline-offset: 3px; }
 
-.nw-node__av { overflow: hidden; }
-.nw-node__img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .nw-node__pulse {
   position: absolute;
   inset: -3px;
   border-radius: 999px;
   border: 3px solid color-mix(in srgb, var(--primary) 45%, transparent);
-  animation: nw-pulse 2.2s ease-out infinite;
+  opacity: 0; /* the ring only pulses while hovered */
 }
 .nw-node--you .nw-node__pulse { border-color: color-mix(in srgb, var(--secondary) 30%, transparent); }
 
@@ -162,10 +250,9 @@
   font-weight: 500;
   white-space: nowrap;
 }
-.nw-node--far .nw-node__label { font-size: 11px; }
 
 /* Hover tooltip: name, role, current company */
-.nw-node:hover, .nw-node:focus-visible { z-index: 10; }
+.nw-node:hover, .nw-node:focus-visible { z-index: 5000 !important; opacity: 1 !important; }
 .nw-node__tip {
   position: absolute;
   bottom: calc(100% + 10px);
@@ -189,7 +276,7 @@
   pointer-events: none;
   transition: opacity 0.15s, transform 0.15s;
 }
-.nw-node__tip--below { bottom: auto; top: calc(100% + 8px); }
+.nw-node--tip-below .nw-node__tip { bottom: auto; top: calc(100% + 8px); }
 .nw-node__tip-name { font-weight: 700; font-size: 13px; }
 .nw-node__tip-row { opacity: 0.85; }
 .nw-node:hover .nw-node__tip,
@@ -210,10 +297,10 @@
   color: var(--secondary-muted);
 }
 .nw-legend span { display: flex; align-items: center; gap: 6px; }
-.nw-legend i { display: block; width: 18px; }
-.nw-legend__path { height: 2px; background: var(--primary); }
-.nw-legend__strong { height: 1.5px; background: var(--ds-line-strong); }
-.nw-legend__weak { border-top: 1.5px dashed var(--ds-line-strong); }
+.nw-legend i { display: block; width: 22px; }
+.nw-legend__path { height: 3px; border-radius: 2px; background: var(--primary); }
+.nw-legend__strong { height: 2.5px; border-radius: 2px; background: var(--tie-strong); }
+.nw-legend__weak { border-top: 2px dashed var(--tie-weak); }
 
 /* Selected-person card */
 .nw-pathcard {
@@ -416,3 +503,4 @@
   .nw-invite__qr svg { width: 112px; height: 112px; }
   .nw-main { padding-top: 20px; padding-bottom: 20px; }
 }
+

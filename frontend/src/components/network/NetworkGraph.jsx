@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { GRAPH_H, GRAPH_W, initials, layoutNodes } from '../../lib/network'
 
 // Fills for people who aren't on the highlighted path (--avatar-1..6 in tokens.css)
@@ -71,42 +71,68 @@ function Node({ node, index, at, role, onSelect }) {
   )
 }
 
+const MAX_FIT = 900 / GRAPH_W // never blow the drawing up past 900px wide
+
+// Scale that fits the GRAPH_W x GRAPH_H drawing inside the element.
+function useFitScale() {
+  const ref = useRef(null)
+  const [fit, setFit] = useState(1)
+  useEffect(() => {
+    const el = ref.current
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect
+      if (width > 0 && height > 0) setFit(Math.min(width / GRAPH_W, height / GRAPH_H, MAX_FIT))
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+  return [ref, fit]
+}
+
 // The radial people graph. `path` is the list of ids from the requester to the
 // selected person; those nodes and the edges between them are highlighted.
+// It is drawn at a fixed design size and scaled as one picture to fit its box,
+// so circles, labels and spacing all shrink or grow together.
 export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1 }) {
   const positions = useMemo(() => layoutNodes(nodes), [nodes])
   const targetId = path.length > 1 ? path[path.length - 1] : null
+  const [fitRef, fit] = useFitScale()
 
   return (
-    <div className="nw-graph" style={{ transform: `scale(${zoom})` }}>
-      <div aria-hidden="true" className="nw-ring nw-ring--inner" />
-      <div aria-hidden="true" className="nw-ring nw-ring--outer" />
+    <div className="nw-graph-fit" ref={fitRef}>
+      <div
+        className="nw-graph"
+        style={{ width: GRAPH_W, height: GRAPH_H, transform: `translate(-50%, -50%) scale(${fit * zoom})` }}
+      >
+        <div aria-hidden="true" className="nw-ring nw-ring--inner" />
+        <div aria-hidden="true" className="nw-ring nw-ring--outer" />
 
-      {edges.map((e) => {
-        const ia = path.indexOf(e.a)
-        const ib = path.indexOf(e.b)
-        const onPath = ia > -1 && ib > -1 && Math.abs(ia - ib) === 1
-        // draw highlighted edges in travel direction so the dot moves away from "you"
-        const [a, b] = onPath && ib < ia ? [e.b, e.a] : [e.a, e.b]
-        if (!positions[a] || !positions[b]) return null
-        return (
-          <Edge
-            key={`${e.a}-${e.b}`}
-            from={positions[a]}
-            to={positions[b]}
-            weak={e.weak}
-            step={onPath ? Math.min(ia, ib) : null}
-          />
-        )
-      })}
+        {edges.map((e) => {
+          const ia = path.indexOf(e.a)
+          const ib = path.indexOf(e.b)
+          const onPath = ia > -1 && ib > -1 && Math.abs(ia - ib) === 1
+          // draw highlighted edges in travel direction so the dot moves away from "you"
+          const [a, b] = onPath && ib < ia ? [e.b, e.a] : [e.a, e.b]
+          if (!positions[a] || !positions[b]) return null
+          return (
+            <Edge
+              key={`${e.a}-${e.b}`}
+              from={positions[a]}
+              to={positions[b]}
+              weak={e.weak}
+              step={onPath ? Math.min(ia, ib) : null}
+            />
+          )
+        })}
 
-      {nodes.map((node, index) => {
-        const at = positions[node.id]
-        if (!at) return null
-        const role =
-          node.depth === 0 ? 'you' : node.id === targetId ? 'target' : path.includes(node.id) ? 'path' : 'other'
-        return <Node key={node.id} node={node} index={index} at={at} role={role} onSelect={onSelect} />
-      })}
+        {nodes.map((node, index) => {
+          const at = positions[node.id]
+          if (!at) return null
+          const role =
+            node.depth === 0 ? 'you' : node.id === targetId ? 'target' : path.includes(node.id) ? 'path' : 'other'
+          return <Node key={node.id} node={node} index={index} at={at} role={role} onSelect={onSelect} />
+        })}
+      </div>
     </div>
   )
 }

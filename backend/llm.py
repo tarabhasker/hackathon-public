@@ -11,7 +11,13 @@ EMBED_MODEL = os.environ.get("GEMINI_EMBED_MODEL", "gemini-embedding-001")
 EMBED_DIM = 768  # must match vector(768) in the facets schema
 GEN_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
 # Tried in order when the preferred model is overloaded (503) or retired (404)
-GEN_FALLBACKS = [GEN_MODEL, "gemini-3.6-flash", "gemini-3.5-flash"]
+GEN_FALLBACKS = [
+    GEN_MODEL,
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+]
 
 
 class LLMUnavailable(Exception):
@@ -23,7 +29,8 @@ def _client():
     if not api_key:
         return None
     from google import genai
-    return genai.Client(api_key=api_key)
+    # per-request cap so an overloaded model fails over instead of hanging
+    return genai.Client(api_key=api_key, http_options={"timeout": 25_000})
 
 
 def _generate(client, contents, config=None):
@@ -38,9 +45,15 @@ def _generate(client, contents, config=None):
             )
         except errors.APIError as e:
             last = e
-            if getattr(e, "code", None) in (404, 429, 503):
+            if getattr(e, "code", None) in (404, 429, 503, 504):
                 continue  # try the next model
             raise
+        except Exception as e:
+            # timeouts (overloaded model) fall through to the next model
+            name = type(e).__name__.lower()
+            if "timeout" not in name and "timeout" not in str(e).lower():
+                raise
+            last = e
     raise last
 
 

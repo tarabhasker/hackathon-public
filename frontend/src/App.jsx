@@ -1,22 +1,34 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import Navbar from './components/Navbar'
-import Home from './pages/Home'
-import Search from './pages/Search'
-import AddProfile from './pages/AddProfile'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import AppShell from './components/layout/AppShell'
+import { GuestOnly, RequireAuth, RequireProfile } from './components/layout/guards'
+import { AuthProvider } from './hooks/useAuth'
+import { Register, SignIn } from './pages/AuthForm'
+import Network from './pages/Network'
 import Quiz from './pages/Quiz'
+import Setup from './pages/Setup'
 
+// Flow: register / sign in -> first-time setup -> main UI (network).
 export default function App() {
   return (
     <BrowserRouter>
-      <Navbar />
-      <main>
+      <AuthProvider>
         <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/search" element={<Search />} />
-          <Route path="/add" element={<AddProfile />} />
-          <Route path="/quiz" element={<Quiz />} />
+          <Route element={<GuestOnly />}>
+            <Route path="/signin" element={<SignIn />} />
+            <Route path="/register" element={<Register />} />
+          </Route>
+          <Route element={<RequireAuth />}>
+            <Route path="/setup" element={<Setup />} />
+            <Route element={<RequireProfile />}>
+              <Route element={<AppShell />}>
+                <Route index element={<Network />} />
+                <Route path="/quiz" element={<Quiz />} />
+              </Route>
+            </Route>
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </main>
+      </AuthProvider>
     </BrowserRouter>
   )
 }

@@ -1,10 +1,14 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
-// Bootstrap: CSS + JS bundle (dropdowns, navbar toggler, modals, etc.)
-import 'bootstrap/dist/css/bootstrap.min.css'
-import 'bootstrap/dist/js/bootstrap.bundle.min.js'
+import '@fontsource-variable/geist'
+import '@fontsource-variable/geist-mono'
+import 'bootstrap/dist/css/bootstrap.min.css' // grid + .btn base still used by the Quiz page
 
+import './styles/tokens.css'
+import './styles/ui.css'
+import './styles/layout.css'
+import './styles/network.css'
 import './index.css'
 import App from './App.jsx'
 

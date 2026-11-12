@@ -2,14 +2,17 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, UploadFile
+from fastapi import FastAPI, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import IntegrityError
 
 load_dotenv()
+
+import auth  # noqa: E402  (reads SECRET_KEY, so must follow load_dotenv)
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -61,6 +64,11 @@ class SearchRequest(BaseModel):
     query: str
     requester_id: int
     limit: int = 5
+
+
+class Credentials(BaseModel):
+    email: str
+    password: str
 
 
 class EmployerIn(BaseModel):
@@ -117,7 +125,90 @@ def submit_quiz(entry: QuizEntry):
     return {"house": house, "entry_number": total}
 
 
+# --- Accounts ---------------------------------------------------------------------
+
+def _user_payload(conn, user_id: int) -> dict | None:
+    row = conn.execute(
+        text(
+            "SELECT u.id, u.email, p.id AS pid, p.name, p.title, p.org_unit "
+            "FROM users u LEFT JOIN people p ON p.id = u.person_id WHERE u.id = :id"
+        ),
+        {"id": user_id},
+    ).first()
+    if row is None:
+        return None
+    person = None
+    if row.pid is not None:
+        person = {"id": row.pid, "name": row.name, "title": row.title, "org_unit": row.org_unit}
+    return {"id": row.id, "email": row.email, "person": person}
+
+
+def _user_id(authorization: str | None) -> int | None:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return None
+    return auth.read_token(authorization[7:].strip())
+
+
+def _require_user(authorization: str | None) -> int:
+    user_id = _user_id(authorization)
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Sign in to continue")
+    return user_id
+
+
+@app.post("/api/auth/register", status_code=201)
+def register(creds: Credentials):
+    email = creds.email.strip().lower()
+    if "@" not in email or len(email) < 5:
+        raise HTTPException(status_code=400, detail="Enter a valid email address")
+    if len(creds.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    try:
+        with engine.begin() as conn:
+            user_id = conn.execute(
+                text("INSERT INTO users (email, password_hash) VALUES (:e, :h) RETURNING id"),
+                {"e": email, "h": auth.hash_password(creds.password)},
+            ).scalar_one()
+            user = _user_payload(conn, user_id)
+    except IntegrityError:
+        raise HTTPException(status_code=409, detail="An account with that email already exists")
+    return {"token": auth.make_token(user_id), "user": user}
+
+
+@app.post("/api/auth/login")
+def login(creds: Credentials):
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT id, password_hash FROM users WHERE email = :e"),
+            {"e": creds.email.strip().lower()},
+        ).first()
+        if row is None or not auth.verify_password(creds.password, row.password_hash):
+            raise HTTPException(status_code=401, detail="Wrong email or password")
+        user = _user_payload(conn, row.id)
+    return {"token": auth.make_token(row.id), "user": user}
+
+
+@app.get("/api/auth/me")
+def whoami(authorization: str | None = Header(default=None)):
+    user_id = _require_user(authorization)
+    with engine.connect() as conn:
+        user = _user_payload(conn, user_id)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Sign in to continue")
+    return user
+
+
 # --- 6 Degrees API ----------------------------------------------------------------
+
+@app.get("/api/projects")
+def list_projects():
+    """Known project names, so first-time setup can link people to real teams."""
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text("SELECT DISTINCT project FROM project_memberships ORDER BY project")
+        ).scalars().all()
+    return rows
+
 
 @app.get("/api/people")
 def list_people():
@@ -146,6 +237,19 @@ def search_people(req: SearchRequest):
             raise HTTPException(status_code=404, detail="requester not found")
         results = matching.search(conn, query, req.requester_id, limit=min(req.limit, 20))
     return {"query": query, "results": results}
+
+
+@app.get("/api/network")
+def get_network(requester_id: int, focus_id: int | None = None):
+    import engine as matching
+
+    with engine.connect() as conn:
+        exists = conn.execute(
+            text("SELECT 1 FROM people WHERE id = :id"), {"id": requester_id}
+        ).first()
+        if not exists:
+            raise HTTPException(status_code=404, detail="requester not found")
+        return matching.network(conn, requester_id, focus_id)
 
 
 @app.post("/api/intake/cv")
@@ -181,13 +285,24 @@ async def intake_cv(file: UploadFile):
 
 
 @app.post("/api/intake/confirm", status_code=201)
-def intake_confirm(profile: ConfirmProfile):
+def intake_confirm(profile: ConfirmProfile, authorization: str | None = Header(default=None)):
     import engine as matching
     import llm
 
     name = profile.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="'name' is required")
+
+    # Signed-in callers get the new person linked to their account (first-time setup)
+    user_id = _user_id(authorization)
+    if user_id is not None:
+        with engine.connect() as conn:
+            account = _user_payload(conn, user_id)
+        if account is None:
+            raise HTTPException(status_code=401, detail="Sign in to continue")
+        if account["person"] is not None:
+            raise HTTPException(status_code=409, detail="Your profile is already set up")
+        profile.email = profile.email or account["email"]
 
     skills = ", ".join(profile.skills) or "general problem solving"
     projects = ", ".join(profile.projects)
@@ -256,6 +371,12 @@ def intake_confirm(profile: ConfirmProfile):
                 )
 
         edges_created = matching.build_edges_for_person(conn, pid)
+
+        if user_id is not None:
+            conn.execute(
+                text("UPDATE users SET person_id = :pid WHERE id = :uid"),
+                {"pid": pid, "uid": user_id},
+            )
 
     return {
         "id": pid,

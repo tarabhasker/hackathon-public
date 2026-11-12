@@ -184,6 +184,115 @@ def _edge_info(conn, a: int, b: int) -> dict:
     return {"type": row.type, "weight": row.weight, "evidence": row.evidence}
 
 
+# --- Network view ---------------------------------------------------------------
+
+MAX_FIRST = 6       # closest direct ties shown around the requester
+MAX_SECOND = 7      # strongest 2-hop people shown on the outer ring
+MAX_PER_VIA = 3     # keep the outer ring spread across introducers
+WEAK_TIE = 0.3      # edges below this weight render as weak ties
+MAX_CROSS_LINKS = 5 # extra ties drawn between shown people, beyond the path tree
+
+
+def network(conn, requester_id: int, focus_id: int | None = None) -> dict:
+    """The requester's neighbourhood for the graph view.
+
+    Nodes are the strongest 1- and 2-hop people (by strongest-path strength),
+    plus everyone on the strongest path to `focus_id` when given. Each node
+    carries `via` (the previous person on its strongest path from the
+    requester) so the client can light up the path.
+    """
+    G = load_graph(conn)
+    paths: dict[int, list[int]] = {requester_id: [requester_id]}
+    if requester_id in G:
+        _, found = nx.single_source_dijkstra(G, requester_id, weight="cost")
+        paths = {n: p for n, p in found.items() if len(p) <= 5}  # same 4-hop cap as search
+
+    def strength(n):
+        p = paths[n]
+        return math.prod(G.edges[u, v]["w"] for u, v in zip(p, p[1:]))
+
+    ranked = sorted((n for n in paths if n != requester_id), key=lambda n: -strength(n))
+    first = [n for n in ranked if len(paths[n]) == 2][:MAX_FIRST]
+    chosen = {requester_id, *first}
+    per_via: dict[int, int] = {}
+    second = 0
+    for n in ranked:
+        if second >= MAX_SECOND:
+            break
+        p = paths[n]
+        if len(p) != 3 or p[1] not in chosen:
+            continue
+        if per_via.get(p[1], 0) >= MAX_PER_VIA:
+            continue
+        per_via[p[1]] = per_via.get(p[1], 0) + 1
+        chosen.add(n)
+        second += 1
+
+    focus_reachable = None
+    if focus_id is not None and focus_id != requester_id:
+        focus_reachable = focus_id in paths
+        if focus_reachable:
+            chosen.update(paths[focus_id])
+
+    people = {
+        r.id: r
+        for r in conn.execute(
+            text("SELECT id, name, title, org_unit, is_real FROM people WHERE id = ANY(:ids)"),
+            {"ids": list(chosen)},
+        )
+    }
+    nodes = []
+    for n in sorted(chosen, key=lambda n: (len(paths[n]), -strength(n) if n != requester_id else 0)):
+        person = people.get(n)
+        if person is None:
+            continue
+        p = paths[n]
+        nodes.append(
+            {
+                "id": n,
+                "name": person.name,
+                "title": person.title,
+                "org_unit": person.org_unit,
+                "is_real": person.is_real,
+                "depth": len(p) - 1,
+                "via": p[-2] if len(p) > 1 else None,
+                "strength": round(strength(n), 3) if n != requester_id else 1.0,
+            }
+        )
+
+    # Strongest evidence per pair, for edges between shown people
+    evidence: dict[tuple[int, int], str] = {}
+    for r in conn.execute(
+        text(
+            "SELECT src, dst, type, evidence FROM edges "
+            "WHERE src = ANY(:ids) AND dst = ANY(:ids) ORDER BY weight"
+        ),
+        {"ids": list(chosen)},
+    ):
+        evidence[(min(r.src, r.dst), max(r.src, r.dst))] = r.evidence or r.type
+
+    def edge_row(a, b, w):
+        return {
+            "a": a,
+            "b": b,
+            "weight": round(w, 3),
+            "weak": w < WEAK_TIE,
+            "evidence": evidence.get((min(a, b), max(a, b)), ""),
+        }
+
+    # Every strongest-path link, plus only the few strongest cross-links:
+    # drawing them all turns the graph into a hairball.
+    edges, cross = [], []
+    for a, b in G.subgraph(chosen).edges():
+        w = G.edges[a, b]["w"]
+        on_tree = paths[a][-2:] == [b, a] or paths[b][-2:] == [a, b]
+        (edges if on_tree else cross).append(edge_row(a, b, w))
+    cross.sort(key=lambda e: -e["weight"])
+    edges += cross[:MAX_CROSS_LINKS]
+
+    return {"nodes": nodes, "edges": edges, "focus_reachable": focus_reachable}
+
+
 # --- Edge building for a new (CV-uploaded) person -------------------------------
 
 def _overlap_weight(base, s1, e1, s2, e2):

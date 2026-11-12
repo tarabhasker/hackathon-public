@@ -1,0 +1,151 @@
+/* Reusable UI primitives (components/ui). Colours come only from tokens.css. */
+
+/* --- Button ----------------------------------------------------------------- */
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: var(--ds-radius-sm);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.ui-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.ui-btn:disabled, .ui-btn[aria-disabled='true'] { opacity: 0.55; cursor: not-allowed; }
+
+.ui-btn--primary { background: var(--primary); color: var(--primary-ink); }
+.ui-btn--primary:hover:not(:disabled) { background: var(--primary-hover); color: var(--primary-ink); }
+
+.ui-btn--secondary { background: var(--secondary); color: var(--secondary-ink); }
+.ui-btn--secondary:hover:not(:disabled) { background: var(--secondary-hover); color: var(--secondary-ink); }
+
+.ui-btn--outline { background: var(--ds-surface); color: var(--secondary); border-color: var(--ds-line); }
+.ui-btn--outline:hover:not(:disabled) { background: var(--secondary-soft); color: var(--secondary); }
+
+.ui-btn--ghost { background: transparent; color: var(--secondary-muted); }
+.ui-btn--ghost:hover:not(:disabled) { background: var(--secondary-soft); color: var(--secondary); }
+
+.ui-btn--sm { min-height: 32px; padding: 0 12px; }
+.ui-btn--lg { min-height: 48px; padding: 0 18px; font-size: 14px; }
+.ui-btn--block { display: flex; width: 100%; }
+.ui-btn--icon { width: 36px; min-height: 36px; padding: 0; }
+
+/* --- Avatar ----------------------------------------------------------------- */
+.ui-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  border-radius: var(--ds-radius-pill);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+.ui-avatar--neutral { background: var(--secondary-soft); color: var(--secondary); }
+.ui-avatar--secondary { background: var(--secondary); color: var(--secondary-ink); }
+.ui-avatar--primary { background: var(--primary); color: var(--primary-ink); }
+.ui-avatar--primary-soft { background: var(--primary-soft); color: var(--primary-soft-ink); }
+.ui-avatar--ring { border: 2px solid var(--primary); }
+
+/* --- Card ------------------------------------------------------------------- */
+.ui-card {
+  border: 1px solid var(--ds-line);
+  border-radius: var(--ds-radius);
+}
+.ui-card--surface { background: var(--ds-surface); }
+.ui-card--tinted { background: var(--ds-bg); }
+
+/* --- Chip & badge ----------------------------------------------------------- */
+.ui-chip {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--ds-line);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface);
+  color: var(--secondary);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.ui-chip:hover { border-color: var(--secondary); }
+.ui-chip:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.ui-chip--selected { background: var(--secondary); border-color: var(--secondary); color: var(--secondary-ink); }
+
+.ui-badge {
+  flex-shrink: 0;
+  padding: 1px 8px;
+  border: 1px solid var(--ds-line);
+  border-radius: var(--ds-radius-pill);
+  font-size: 11px;
+  color: var(--secondary-muted);
+  white-space: nowrap;
+}
+.ui-badge--primary { border-color: transparent; background: var(--primary-soft); color: var(--primary-soft-ink); }
+.ui-badge--warn { border-color: transparent; background: var(--ds-warn-soft); color: var(--ds-warn-soft-ink); }
+
+/* --- Text ------------------------------------------------------------------- */
+.ui-eyebrow {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--secondary-muted);
+}
+
+.ui-notice {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--ds-radius-sm);
+  font-size: 13px;
+}
+.ui-notice--danger { background: var(--ds-danger-soft); color: var(--ds-danger-soft-ink); }
+.ui-notice--ok { background: var(--ds-ok-soft); color: var(--ds-ok-soft-ink); }
+.ui-notice--warn { background: var(--ds-warn-soft); color: var(--ds-warn-soft-ink); }
+
+/* --- Text field ------------------------------------------------------------- */
+.ui-field { display: flex; flex-direction: column; gap: 6px; }
+.ui-field__label { font-size: 13px; font-weight: 500; color: var(--secondary); }
+.ui-field__note { font-size: 12px; color: var(--secondary-muted); }
+.ui-field__note--error { color: var(--ds-danger-soft-ink); }
+
+.ui-input {
+  min-height: 44px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0 12px;
+  border: 1px solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface);
+  color: var(--secondary);
+  font: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.ui-input::placeholder { color: var(--secondary-muted); }
+.ui-input:focus {
+  outline: none;
+  border-color: var(--secondary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+.ui-input--error { border-color: var(--ds-danger); }
+.ui-input:disabled { opacity: 0.6; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

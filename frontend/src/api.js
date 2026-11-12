@@ -2,6 +2,9 @@
 // the backend serves this app itself, so relative URLs hit the same origin
 export const API_BASE = import.meta.env.DEV ? 'http://127.0.0.1:5001' : ''
 
+// Absolute URL for a backend-served asset path such as a person's `avatar_url`.
+export const assetUrl = (path) => (path ? `${API_BASE}${path}` : undefined)
+
 const TOKEN_KEY = 'bff.token'
 
 export function getToken() {

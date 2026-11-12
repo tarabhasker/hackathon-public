@@ -35,6 +35,38 @@ const PATHS = {
   logout: <path d="M10 4H5v16h5M15 8l4 4-4 4M19 12H9" />,
   check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
   upload: <path d="M12 16V4M7 9l5-5 5 5M4 20h16" />,
+  download: <path d="M12 4v12M7 11l5 5 5-5M4 20h16" />,
+  sidebar: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2.5" />
+      <path d="M9.5 4v16" />
+    </>
+  ),
+  calendar: (
+    <>
+      <rect x="3.5" y="5" width="17" height="15" rx="2.5" />
+      <path d="M3.5 10h17M8 3v4M16 3v4" />
+    </>
+  ),
+  expand: <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />,
+  trash: <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6" />,
+  home: <path d="M4 10.5L12 4l8 6.5V20h-5.5v-5h-5v5H4z" />,
+  share: <path d="M12 14V3.5M8.5 6.5L12 3l3.5 3.5M7 10H5v10h14V10h-2" />,
+  user: (
+    <>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4.5 20.5c1-4 4-6 7.5-6s6.5 2 7.5 6" />
+    </>
+  ),
+  back: <path d="M15 6l-6 6 6 6" />,
+  folder: <path d="M3.5 6.5h6l2 2.5h9v10.5h-17z" />,
+  pencil: <path d="M4 20l1-4.5L16.5 4 20 7.5 8.5 19zM14 6.5l3.5 3.5" />,
+  camera: (
+    <>
+      <path d="M4 8h3l1.5-2.5h7L17 8h3v11H4z" />
+      <circle cx="12" cy="13" r="3.5" />
+    </>
+  ),
 }
 
 export default function Icon({ name, size = 18, strokeWidth = 1.8, ...rest }) {

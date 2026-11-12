@@ -3,7 +3,7 @@ import { Eyebrow, Icon } from '../ui'
 import PersonRow from './PersonRow'
 
 // Search box + result list. `rows` is [{person, hops}].
-export default function SearchPanel({ query, onQuery, rows, heading, searching, error, activeId, onPick }) {
+export default function SearchPanel({ query, onQuery, rows, heading, searching, error, activeId, onPick, onConnect, connectingId, connectedIds }) {
   const inputRef = useRef(null)
 
   // ⌘K / Ctrl+K jumps to the search box
@@ -45,6 +45,9 @@ export default function SearchPanel({ query, onQuery, rows, heading, searching, 
             hops={row.hops}
             active={row.person.id === activeId}
             onPick={onPick}
+            onConnect={onConnect}
+            connecting={connectingId === row.person.id}
+            connected={connectedIds?.has(row.person.id)}
           />
         ))}
         {rows.length === 0 && !searching && (

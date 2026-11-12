@@ -6,25 +6,58 @@
    the --ds-* aliases further down), so nothing else needs to change.
 --------------------------------------------------------------------------- */
 :root {
+  /* Palette: #1E4542 pine · #367B70 green · #D9D2C0 stone · #9AB5A6 sage · #EDE4D9 cream
+     (the tints below are those colours lightened toward white) */
+
   /* PRIMARY — calls to action, active nav, "your path" in the graph */
-  --primary: #9E3B33;            /* Oxblood */
-  --primary-hover: #8B342D;
-  --primary-ink: #FDF0EE;        /* text on primary */
-  --primary-soft: #F3E1DE;       /* tinted backgrounds: chips, active nav */
-  --primary-soft-ink: #7A2A24;   /* text on primary-soft */
+  --primary: #367B70;            /* green */
+  --primary-hover: #2B655C;
+  --primary-ink: #FFFFFF;        /* text on primary */
+  --primary-soft: #DDE7E1;       /* sage tint: chips, active nav, selected rows */
+  --primary-soft-ink: #1E4542;   /* text on primary-soft */
 
   /* SECONDARY — text, outlines, the "you" node, quiet solid buttons */
-  --secondary: #1B1613;          /* Obsidian ink */
-  --secondary-hover: #3A322D;
+  --secondary: #1E4542;          /* pine */
+  --secondary-hover: #2C5A56;
   --secondary-ink: #FFFFFF;      /* text on secondary */
-  --secondary-soft: #F4ECE0;     /* warm raised surface, hover rows */
-  --secondary-muted: #7A7066;    /* secondary text */
+  --secondary-soft: #F4EFE8;     /* cream tint: hover rows, raised surfaces */
+  --secondary-muted: #4F625E;    /* secondary text (passes 4.5:1 on white and on cream) */
 
   /* Neutral surfaces */
-  --ds-bg: #FAF6EE;
+  --ds-bg: #FFFFFF;              /* page background — keep white */
+  --ds-bg-tint: #EDE4D9;         /* cream panels on the white page */
   --ds-surface: #FFFFFF;
-  --ds-line: #ECE3D6;
-  --ds-line-strong: #D9CEBF;
+  --ds-line: #E7E0D4;
+  --ds-line-strong: #D9D2C0;     /* stone */
+
+  /* Avatar fills (graph nodes and the sign-up background) */
+  --avatar-1: #EDE4D9;           /* cream */
+  --avatar-2: #D9D2C0;           /* stone */
+  --avatar-3: #9AB5A6;           /* sage */
+  --avatar-4: #DDE7E1;           /* sage tint */
+  --avatar-5: #F4EFE8;           /* cream tint */
+  --avatar-6: #C8D7CE;           /* light sage */
+
+  /* Planet colours in the 3D network (palette colours, a little deeper so the
+     spheres hold their shading) */
+  --planet-1: #9AB5A6;           /* sage */
+  --planet-2: #D9D2C0;           /* stone */
+  --planet-3: #7FA08F;           /* deep sage */
+  --planet-4: #E4D8C8;           /* cream */
+  --planet-5: #B5C7BB;           /* light sage */
+  --planet-6: #C7BCA3;           /* deep stone */
+
+  /* Connection lines in the network view */
+  --tie-strong: #5E8676;         /* deep sage, solid */
+  --tie-weak: #A8997C;           /* deep stone, dashed */
+
+  /* Sign-in / sign-up hero panel */
+  --hero-bg:
+    radial-gradient(800px 520px at 90% 0%, rgba(154, 181, 166, 0.35), transparent 60%),
+    linear-gradient(160deg, #367B70 0%, #2C665E 50%, #1E4542 100%);
+  --hero-shade: #1E4542;         /* dims bubbles behind the hero text */
+  --hero-accent: #EDE4D9;        /* italic line of the headline (cream) */
+  --hero-mark: #9AB5A6;          /* right-hand logo circle on the hero (sage) */
 
   /* Design-system aliases (names used on the design canvas) */
   --ds-accent: var(--primary);
@@ -62,12 +95,85 @@
   --ds-shadow-3: 0 14px 32px -16px rgba(0, 0, 0, 0.24);
 
   /* Radius & type */
-  --ds-radius: 8px;
-  --ds-radius-sm: 6px;
-  --ds-radius-lg: 16px;
+  --ds-radius: 12px;               /* cards and panels */
+  --ds-radius-sm: 10px;            /* small controls */
+  --ds-radius-lg: 20px;            /* hero panels, the graph canvas */
   --ds-radius-pill: 999px;
+  --ds-radius-button: var(--ds-radius-pill);  /* every button; set to e.g. 8px for squarer buttons */
+  --ds-radius-input: 12px;         /* text inputs */
   --ds-font: "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   /* Display serif: hero headlines only, never in app chrome */
   --ds-font-display: "Fraunces Variable", "Iowan Old Style", Georgia, serif;
   --ds-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* ---------------------------------------------------------------------------
+   Alternative themes. Each one overrides only the brand families above.
+   Pick one by setting <html data-theme="...">; no attribute = the default palette above.
+   Themes without their own --hero-* values get a hero built from their brand colours.
+--------------------------------------------------------------------------- */
+:root[data-theme] {
+  --hero-bg:
+    radial-gradient(900px 600px at 85% 0%, color-mix(in srgb, var(--primary) 55%, transparent), transparent 65%),
+    var(--secondary);
+  --hero-shade: var(--secondary);
+  --hero-accent: color-mix(in srgb, var(--primary) 45%, white);
+  --ds-line: #ECE3D6;
+  --ds-line-strong: #D9CEBF;
+}
+
+:root[data-theme='oxblood'] {
+  --primary: #9E3B33;
+  --primary-hover: #8B342D;
+  --primary-ink: #FDF0EE;
+  --primary-soft: #F3E1DE;
+  --primary-soft-ink: #7A2A24;
+  --secondary: #1B1613;
+  --secondary-hover: #3A322D;
+  --secondary-ink: #FFFFFF;
+  --secondary-soft: #F4ECE0;
+  --secondary-muted: #7A7066;
+  --ds-bg-tint: #FAF6EE;
+}
+
+:root[data-theme='forest'] {
+  --primary: #2F6B4F;
+  --primary-hover: #275A42;
+  --primary-ink: #F1F8F4;
+  --primary-soft: #E1EFE7;
+  --primary-soft-ink: #1F4A36;
+  --secondary: #15201B;
+  --secondary-hover: #2C3A33;
+  --secondary-ink: #FFFFFF;
+  --secondary-soft: #EEF3EF;
+  --secondary-muted: #66736B;
+  --ds-bg-tint: #F5F8F5;
+}
+
+:root[data-theme='indigo'] {
+  --primary: #4338CA;
+  --primary-hover: #3730A3;
+  --primary-ink: #EEF2FF;
+  --primary-soft: #E7E7FB;
+  --primary-soft-ink: #312E81;
+  --secondary: #111827;
+  --secondary-hover: #2A3242;
+  --secondary-ink: #FFFFFF;
+  --secondary-soft: #F1F3F8;
+  --secondary-muted: #6B7280;
+  --ds-bg-tint: #F6F7FB;
+}
+
+:root[data-theme='tangerine'] {
+  --primary: #C2410C;
+  --primary-hover: #A3360A;
+  --primary-ink: #FFF7ED;
+  --primary-soft: #FCE9DC;
+  --primary-soft-ink: #7C2D12;
+  --secondary: #1C1917;
+  --secondary-hover: #35302C;
+  --secondary-ink: #FFFFFF;
+  --secondary-soft: #F5F1EE;
+  --secondary-muted: #78716C;
+  --ds-bg-tint: #FBF7F3;
 }

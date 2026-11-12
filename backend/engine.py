@@ -17,6 +17,11 @@ THIS_YEAR = 2026
 NO_PATH_STRENGTH = 0.02  # floor so unreachable people still rank, labeled "cold"
 
 
+def avatar_url(key: str | None) -> str | None:
+    """Public path of a person's photo, or None if they haven't uploaded one."""
+    return f"/api/avatars/{key}" if key else None
+
+
 # --- Graph --------------------------------------------------------------------
 
 def load_graph(conn) -> nx.Graph:
@@ -99,6 +104,23 @@ def relevance_candidates(conn, query: str, limit: int = 40) -> list[dict]:
 def search(conn, query: str, requester_id: int, limit: int = 5) -> list[dict]:
     candidates = relevance_candidates(conn, query)
     candidates = [c for c in candidates if c["person_id"] != requester_id]
+
+    # Direct name matches rank first: typing someone's name should always find
+    # them, even though the semantic index only covers expertise text.
+    by_id = {c["person_id"]: c for c in candidates}
+    for r in conn.execute(
+        text("SELECT id, name FROM people WHERE name ILIKE :q AND id != :me LIMIT 10"),
+        {"q": f"%{query.strip()}%", "me": requester_id},
+    ):
+        hit = by_id.get(r.id)
+        if hit is None:
+            candidates.append(
+                {"person_id": r.id, "relevance": 0.99, "snippet": r.name, "matched": ["name"]}
+            )
+        else:
+            hit["relevance"] = max(hit["relevance"], 0.99)
+            hit["matched"] = ["name"] + [m for m in hit.get("matched", []) if m != "name"]
+
     if not candidates:
         return []
 
@@ -108,7 +130,7 @@ def search(conn, query: str, requester_id: int, limit: int = 5) -> list[dict]:
         r.id: dict(r._mapping)
         for r in conn.execute(
             text(
-                "SELECT id, name, title, org_unit, opt_in, is_real "
+                "SELECT id, name, title, org_unit, opt_in, is_real, avatar_key "
                 "FROM people WHERE id = ANY(:ids)"
             ),
             {"ids": list(ids)},
@@ -155,7 +177,10 @@ def search(conn, query: str, requester_id: int, limit: int = 5) -> list[dict]:
         )
         results.append(
             {
-                "person": {k: person[k] for k in ("id", "name", "title", "org_unit", "is_real")},
+                "person": {
+                    **{k: person[k] for k in ("id", "name", "title", "org_unit", "is_real")},
+                    "avatar_url": avatar_url(person["avatar_key"]),
+                },
                 "score": round(score, 4),
                 "relevance": round(c["relevance"], 3),
                 "path_strength": round(strength, 3),
@@ -186,58 +211,79 @@ def _edge_info(conn, a: int, b: int) -> dict:
 
 # --- Network view ---------------------------------------------------------------
 
-MAX_FIRST = 6       # closest direct ties shown around the requester
-MAX_SECOND = 7      # strongest 2-hop people shown on the outer ring
-MAX_PER_VIA = 3     # keep the outer ring spread across introducers
-WEAK_TIE = 0.3      # edges below this weight render as weak ties
-MAX_CROSS_LINKS = 5 # extra ties drawn between shown people, beyond the path tree
+MAX_FIRST = 6        # closest direct ties shown around the requester
+MAX_PER_DEPTH = 8    # strongest people shown on each ring beyond the first
+MAX_PER_VIA = 3      # keep each ring spread across introducers
+WEAK_TIE = 0.3       # edges below this weight render as weak ties
+MAX_CROSS_LINKS = 20 # extra ties drawn between shown people, beyond the path tree
+DEFAULT_DEGREES = 3  # how far out the view reaches unless the client asks otherwise
+MAX_DEGREES = 6
 
 
-def network(conn, requester_id: int, focus_id: int | None = None) -> dict:
-    """The requester's neighbourhood for the graph view.
+def network(
+    conn, requester_id: int, focus_id: int | None = None, degrees: int = DEFAULT_DEGREES
+) -> dict:
+    """The requester's neighbourhood out to `degrees` hops, for the graph view.
 
-    Nodes are the strongest 1- and 2-hop people (by strongest-path strength),
+    Nodes are the strongest people on each ring (by strongest-path strength),
     plus everyone on the strongest path to `focus_id` when given. Each node
     carries `via` (the previous person on its strongest path from the
     requester) so the client can light up the path.
     """
+    degrees = max(1, min(MAX_DEGREES, int(degrees)))
     G = load_graph(conn)
-    paths: dict[int, list[int]] = {requester_id: [requester_id]}
+    # all reachable paths (up to the hard cap), so a focus target further out
+    # than the chosen degree still gets its path drawn
+    all_paths: dict[int, list[int]] = {requester_id: [requester_id]}
     if requester_id in G:
         _, found = nx.single_source_dijkstra(G, requester_id, weight="cost")
-        paths = {n: p for n, p in found.items() if len(p) <= 5}  # same 4-hop cap as search
+        all_paths = {n: p for n, p in found.items() if len(p) <= MAX_DEGREES + 1}
+    paths = {n: p for n, p in all_paths.items() if len(p) <= degrees + 1}
 
     def strength(n):
-        p = paths[n]
+        p = all_paths[n]
         return math.prod(G.edges[u, v]["w"] for u, v in zip(p, p[1:]))
 
     ranked = sorted((n for n in paths if n != requester_id), key=lambda n: -strength(n))
-    first = [n for n in ranked if len(paths[n]) == 2][:MAX_FIRST]
-    chosen = {requester_id, *first}
+    chosen = {requester_id}
     per_via: dict[int, int] = {}
-    second = 0
-    for n in ranked:
-        if second >= MAX_SECOND:
-            break
-        p = paths[n]
-        if len(p) != 3 or p[1] not in chosen:
-            continue
-        if per_via.get(p[1], 0) >= MAX_PER_VIA:
-            continue
-        per_via[p[1]] = per_via.get(p[1], 0) + 1
-        chosen.add(n)
-        second += 1
+    # ring by ring: each depth keeps its strongest few, spread across introducers
+    for depth in range(1, degrees + 1):
+        cap = MAX_FIRST if depth == 1 else MAX_PER_DEPTH
+        picked = 0
+        for n in ranked:
+            if picked >= cap:
+                break
+            p = paths[n]
+            if len(p) - 1 != depth or n in chosen or p[-2] not in chosen:
+                continue
+            if depth > 1 and per_via.get(p[-2], 0) >= MAX_PER_VIA:
+                continue
+            per_via[p[-2]] = per_via.get(p[-2], 0) + 1
+            chosen.add(n)
+            picked += 1
 
     focus_reachable = None
     if focus_id is not None and focus_id != requester_id:
-        focus_reachable = focus_id in paths
+        focus_reachable = focus_id in all_paths
         if focus_reachable:
-            chosen.update(paths[focus_id])
+            chosen.update(all_paths[focus_id])
+            for n in all_paths[focus_id]:
+                paths.setdefault(n, all_paths[n])
 
     people = {
         r.id: r
         for r in conn.execute(
-            text("SELECT id, name, title, org_unit, is_real FROM people WHERE id = ANY(:ids)"),
+            text(
+                "SELECT p.id, p.name, p.title, p.org_unit, p.is_real, p.avatar_key, cur.org AS company "
+                "FROM people p "
+                "LEFT JOIN LATERAL ("
+                "  SELECT org FROM positions WHERE person_id = p.id "
+                "  ORDER BY (ended_year IS NULL) DESC, COALESCE(ended_year, 9999) DESC, "
+                "           started_year DESC NULLS LAST LIMIT 1"
+                ") cur ON true "
+                "WHERE p.id = ANY(:ids)"
+            ),
             {"ids": list(chosen)},
         )
     }
@@ -253,7 +299,9 @@ def network(conn, requester_id: int, focus_id: int | None = None) -> dict:
                 "name": person.name,
                 "title": person.title,
                 "org_unit": person.org_unit,
+                "company": person.company,
                 "is_real": person.is_real,
+                "avatar_url": avatar_url(person.avatar_key),
                 "depth": len(p) - 1,
                 "via": p[-2] if len(p) > 1 else None,
                 "strength": round(strength(n), 3) if n != requester_id else 1.0,
@@ -277,8 +325,7 @@ def network(conn, requester_id: int, focus_id: int | None = None) -> dict:
             "b": b,
             "weight": round(w, 3),
             "weak": w < WEAK_TIE,
-            "evidence": evidence.get((min(a, b), max(a, b)), ""),
-        }
+            "evidence": evidence.get((min(a, b), max(a, b)), ""),        }
 
     # Every strongest-path link, plus only the few strongest cross-links:
     # drawing them all turns the graph into a hairball.

@@ -194,6 +194,71 @@ def make_edges(people):
     return list(edges.values())
 
 
+# (name, days since created, how many joined, join window in days-ago [newest, oldest], still open?)
+EVENTS = [
+    ("Hackathon Kickoff Mixer", 12, 46, (8, 12), False),
+    ("Data Guild Lunch & Learn", 7, 28, (5, 7), False),
+    ("Infra Office Hours", 4, 19, (1, 4), True),
+    ("Founders Friday", 1, 12, (0, 1), True),
+]
+
+
+def seed_events(conn, person_ids):
+    """Demo events with attendees. Members need accounts, so the people who
+    'attended' get synthetic user rows (random unusable password)."""
+    import auth
+
+    # one hash for all synthetic accounts; nobody can log in as them
+    unusable = auth.hash_password(rng.random().hex() + "-synthetic-no-login")
+
+    event_rng = random.Random(1337)
+    attendee_pool = event_rng.sample(person_ids, min(90, len(person_ids)))
+    user_ids = {}
+    for pid in attendee_pool:
+        email = conn.execute(
+            text("SELECT email FROM people WHERE id = :id"), {"id": pid}
+        ).scalar_one()
+        user_ids[pid] = conn.execute(
+            text(
+                "INSERT INTO users (email, password_hash, person_id) "
+                "VALUES (:e, :h, :p) RETURNING id"
+            ),
+            {"e": email, "h": unusable, "p": pid},
+        ).scalar_one()
+
+    pool = list(attendee_pool)
+    event_rng.shuffle(pool)
+    for name, created_days, size, (newest, oldest), is_open in EVENTS:
+        code = "".join(event_rng.choice("abcdefghjkmnpqrstuvwxyz23456789") for _ in range(7))
+        event_id = conn.execute(
+            text(
+                "INSERT INTO events (code, name, description, is_open, created_at) "
+                "VALUES (:c, :n, :d, :o, CURRENT_TIMESTAMP - :days * INTERVAL '1 day') "
+                "RETURNING id"
+            ),
+            {
+                "c": code, "n": name, "o": is_open, "days": created_days,
+                "d": f"Scan to join {name} and get connected to everyone in the room.",
+            },
+        ).scalar_one()
+        members = event_rng.sample(pool, min(size, len(pool)))
+        for pid in members:
+            minutes_ago = event_rng.randint(newest * 24 * 60, oldest * 24 * 60)
+            conn.execute(
+                text(
+                    "INSERT INTO event_members (event_id, user_id, joined_at) "
+                    "VALUES (:e, :u, CURRENT_TIMESTAMP - :m * INTERVAL '1 minute') "
+                    "ON CONFLICT DO NOTHING"
+                ),
+                {"e": event_id, "u": user_ids[pid], "m": minutes_ago},
+            )
+    counts = conn.execute(text(
+        "SELECT COUNT(*) FROM events WHERE host_user_id IS NULL"
+    )).scalar_one()
+    joins = conn.execute(text("SELECT COUNT(*) FROM event_members")).scalar_one()
+    print(f"Seeded: {counts} demo events, {joins} total joins")
+
+
 def embed_all(conn):
     import llm  # deferred so the base seed needs no key
 
@@ -245,10 +310,14 @@ def main():
     edges = make_edges(people)
 
     with engine.connect() as conn:
-        # wipe previous synthetic data; CV-uploaded real people (is_real) survive
+        # wipe previous synthetic data; CV-uploaded real people (is_real) survive.
+        # Synthetic attendee accounts hang off synthetic people, and demo events
+        # are the ones with no host, so both go first.
         conn.execute(text(
-            "DELETE FROM people WHERE is_real = false"
+            "DELETE FROM users WHERE person_id IN (SELECT id FROM people WHERE is_real = false)"
         ))
+        conn.execute(text("DELETE FROM events WHERE host_user_id IS NULL"))
+        conn.execute(text("DELETE FROM people WHERE is_real = false"))
         conn.commit()
 
         id_map = {}
@@ -311,12 +380,40 @@ def main():
         )
         conn.commit()
 
+        # Wiping synthetic people cascades away real users' edges to them, so
+        # re-attach each real user to a few synthetic people. Otherwise the
+        # logged-in user sits alone in the network view.
+        real_ids = conn.execute(
+            text("SELECT id FROM people WHERE is_real = true ORDER BY id")
+        ).scalars().all()
+        synthetic_ids = list(id_map.values())
+        for rid in real_ids:
+            for other in rng.sample(synthetic_ids, k=min(6, len(synthetic_ids))):
+                conn.execute(
+                    text(
+                        "INSERT INTO edges (src, dst, type, weight, started_at, ended_at, evidence) "
+                        "VALUES (:a, :b, 'declared', :w, :s, :e, 'declared connection (seeded)') "
+                        "ON CONFLICT (src, dst, type) DO NOTHING"
+                    ),
+                    {
+                        "a": min(rid, other), "b": max(rid, other),
+                        "w": round(rng.uniform(0.4, 0.7), 3),
+                        "s": dt.date(THIS_YEAR - 2, 1, 1), "e": dt.date(THIS_YEAR, 1, 1),
+                    },
+                )
+        conn.commit()
+        if real_ids:
+            print(f"Linked {len(real_ids)} real user(s) to synthetic people")
+
         counts = conn.execute(text(
             "SELECT (SELECT COUNT(*) FROM people) AS people, "
             "(SELECT COUNT(*) FROM facets) AS facets, "
             "(SELECT COUNT(*) FROM edges) AS edges"
         )).one()
         print(f"Seeded: {counts.people} people, {counts.facets} facets, {counts.edges} edges")
+
+        seed_events(conn, list(id_map.values()))
+        conn.commit()
 
         if args.with_embeddings:
             embed_all(conn)

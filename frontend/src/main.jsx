@@ -11,6 +11,7 @@ import './styles/tokens.css'
 import './styles/ui.css'
 import './styles/layout.css'
 import './styles/network.css'
+import './styles/profile.css'
 import './index.css'
 import App from './App.jsx'
 

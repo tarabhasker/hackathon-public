@@ -1,3 +1,4 @@
+import { assetUrl } from '../../api'
 import { Avatar } from '../ui'
 
 // Vertical "You → … → target" chain with the reason for each link.
@@ -19,6 +20,7 @@ export default function PathSteps({ path, byId, evidence }) {
             <div className="nw-steps__person">
               <Avatar
                 name={person.name}
+                src={assetUrl(person.avatar_url)}
                 label={isYou ? 'YOU' : undefined}
                 size={28}
                 tone={isYou ? 'secondary' : isTarget ? 'primary-soft' : 'neutral'}

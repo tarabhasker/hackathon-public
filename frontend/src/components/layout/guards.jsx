@@ -20,9 +20,16 @@ export function RequireProfile() {
   return user.person ? <Outlet /> : <Navigate to="/setup" replace />
 }
 
+export function RequireAdmin() {
+  const { user } = useAuth()
+  return user.is_admin ? <Outlet /> : <Navigate to="/" replace />
+}
+
 export function GuestOnly() {
   const { user, loading } = useAuth()
   if (loading) return <Splash />
   if (!user) return <Outlet />
+  // admins without a profile land on the admin page, not the setup funnel
+  if (!user.person && user.is_admin) return <Navigate to="/admin" replace />
   return <Navigate to={user.person ? '/' : '/setup'} replace />
 }

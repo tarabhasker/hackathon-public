@@ -558,7 +558,7 @@
 .ev-head__desc { margin: 6px 0 0; font-size: 13.5px; color: var(--secondary-muted); max-width: 560px; }
 .ev-head__actions { display: flex; gap: 8px; }
 
-.ev-grid { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; align-items: start; }
+.ev-grid { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; align-items: stretch; }
 .ev-grid > * { animation: adm-rise 0.55s ease both; }
 .ev-grid > *:nth-child(2) { animation-delay: 80ms; }
 @media (max-width: 960px) { .ev-grid { grid-template-columns: 1fr; } }
@@ -838,15 +838,13 @@
 }
 
 .rg-legend {
-  position: absolute;
-  left: 12px;
-  bottom: 10px;
   list-style: none;
-  margin: 0;
+  margin: 10px 2px 0;
   padding: 0;
   display: flex;
-  gap: 14px;
-  font-size: 11px;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 11.5px;
   color: var(--secondary-muted);
 }
 .rg-legend li { display: inline-flex; align-items: center; gap: 6px; }
@@ -934,3 +932,41 @@
   padding: 3px 9px;
   flex: 0 0 auto;
 }
+
+/* --- QR card: full-height, dark, high contrast --------------------------------------- */
+.ev-qr {
+  height: 100%;
+  box-sizing: border-box;
+  background:
+    radial-gradient(400px 260px at 110% -20%, color-mix(in srgb, var(--primary) 45%, transparent), transparent 70%),
+    var(--secondary);
+  border-color: transparent;
+  color: var(--secondary-ink);
+}
+.ev-qr .ui-eyebrow { color: color-mix(in srgb, var(--secondary-ink) 62%, transparent); }
+.ev-qr .ev-qr__code { border-color: transparent; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); }
+
+.ev-qr .ev-qr__link input {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: var(--secondary-ink);
+}
+.ev-qr .ui-btn--outline {
+  border-color: rgba(255, 255, 255, 0.28);
+  color: var(--secondary-ink);
+  background: transparent;
+}
+.ev-qr .ui-btn--outline:hover { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.45); }
+
+.ev-qr .ev-qr__settings { margin-top: auto; } /* fills the stretched card: settings sit at the foot */
+.ev-qr .ev-qr__settings summary { color: color-mix(in srgb, var(--secondary-ink) 62%, transparent); }
+.ev-qr .ev-qr__settings summary:hover { color: var(--secondary-ink); }
+.ev-qr .ui-field__label { color: color-mix(in srgb, var(--secondary-ink) 70%, transparent); }
+.ev-qr .ui-field__note { color: color-mix(in srgb, var(--secondary-ink) 55%, transparent); }
+.ev-qr .ui-input {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: var(--secondary-ink);
+}
+.ev-qr .ui-input::placeholder { color: color-mix(in srgb, var(--secondary-ink) 40%, transparent); }
+.ev-qr .ui-input:focus { border-color: var(--primary); }

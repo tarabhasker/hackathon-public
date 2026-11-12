@@ -38,6 +38,19 @@
   --avatar-5: #F4EFE8;           /* cream tint */
   --avatar-6: #C8D7CE;           /* light sage */
 
+  /* Planet colours in the 3D network (palette colours, a little deeper so the
+     spheres hold their shading) */
+  --planet-1: #9AB5A6;           /* sage */
+  --planet-2: #D9D2C0;           /* stone */
+  --planet-3: #7FA08F;           /* deep sage */
+  --planet-4: #E4D8C8;           /* cream */
+  --planet-5: #B5C7BB;           /* light sage */
+  --planet-6: #C7BCA3;           /* deep stone */
+
+  /* Connection lines in the network view */
+  --tie-strong: #5E8676;         /* deep sage, solid */
+  --tie-weak: #A8997C;           /* deep stone, dashed */
+
   /* Sign-in / sign-up hero panel */
   --hero-bg:
     radial-gradient(800px 520px at 90% 0%, rgba(154, 181, 166, 0.35), transparent 60%),

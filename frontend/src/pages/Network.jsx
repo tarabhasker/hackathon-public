@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import InvitePanel from '../components/network/InvitePanel'
 import MobileFind from '../components/network/MobileFind'
 import NetworkGraph from '../components/network/NetworkGraph'
 import PathCard from '../components/network/PathCard'
@@ -13,6 +12,20 @@ import { usePeopleSearch } from '../hooks/usePeopleSearch'
 import { ctaLabel, describePath, draftMessage } from '../lib/network'
 
 const ZOOM = { min: 0.6, max: 1.6, step: 0.2 }
+const VIEW_KEY = 'bff.networkView'
+const VIEWS = [
+  { id: '2d', label: '2D' },
+  { id: '3d', label: '3D' },
+]
+
+function savedView() {
+  try {
+    const saved = localStorage.getItem(VIEW_KEY)
+    return VIEWS.some((v) => v.id === saved) ? saved : '3d'
+  } catch {
+    return '3d'
+  }
+}
 
 // Main UI: the signed-in person's network, search and invites.
 export default function Network() {
@@ -22,6 +35,15 @@ export default function Network() {
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState('org') // 'org' | 'division' (mobile filter)
   const [zoom, setZoom] = useState(1)
+  const [view, setView] = useState(savedView) // '2d' flat map | '3d' sphere
+  const chooseView = (next) => {
+    setView(next)
+    try {
+      localStorage.setItem(VIEW_KEY, next)
+    } catch {
+      // storage unavailable: the choice lasts for this visit
+    }
+  }
   const search = usePeopleSearch(query, { limit: 20 })
   const [ctaDone, copyDraft] = useCopied(2600)
 
@@ -82,6 +104,19 @@ export default function Network() {
             <span>People within 2 hops of you. Click anyone to see the strongest path.</span>
           </div>
           <div className="nw-zoom">
+            <div className="nw-viewtoggle" role="group" aria-label="Network view">
+              {VIEWS.map(({ id: v, label }) => (
+                <button
+                  key={v}
+                  type="button"
+                  className="nw-viewtoggle__btn"
+                  aria-pressed={view === v}
+                  onClick={() => chooseView(v)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <Button variant="outline" iconOnly aria-label="Zoom in" disabled={zoom >= ZOOM.max}
               onClick={() => setZoom((z) => Math.min(ZOOM.max, +(z + ZOOM.step).toFixed(1)))}>
               <Icon name="plus" size={16} strokeWidth={2} />
@@ -102,7 +137,7 @@ export default function Network() {
           ) : network.loading ? (
             <span className="nw-canvas__status" role="status">Loading your network…</span>
           ) : (
-            <NetworkGraph nodes={network.nodes} edges={network.edges} path={path} onSelect={select} zoom={zoom} />
+            <NetworkGraph nodes={network.nodes} edges={network.edges} path={path} onSelect={select} zoom={zoom} mode={view} />
           )}
 
           <div className="nw-legend">

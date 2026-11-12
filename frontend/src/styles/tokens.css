@@ -1,0 +1,71 @@
+/* ---------------------------------------------------------------------------
+   Theme tokens (LegoRag design system, light).
+
+   TO RE-THEME THE APP, EDIT ONLY THE TWO BRAND FAMILIES BELOW.
+   Every component reads colour through these variables (directly, or through
+   the --ds-* aliases further down), so nothing else needs to change.
+--------------------------------------------------------------------------- */
+:root {
+  /* PRIMARY — calls to action, active nav, "your path" in the graph */
+  --primary: #9E3B33;            /* Oxblood */
+  --primary-hover: #8B342D;
+  --primary-ink: #FDF0EE;        /* text on primary */
+  --primary-soft: #F3E1DE;       /* tinted backgrounds: chips, active nav */
+  --primary-soft-ink: #7A2A24;   /* text on primary-soft */
+
+  /* SECONDARY — text, outlines, the "you" node, quiet solid buttons */
+  --secondary: #1B1613;          /* Obsidian ink */
+  --secondary-hover: #3A322D;
+  --secondary-ink: #FFFFFF;      /* text on secondary */
+  --secondary-soft: #F4ECE0;     /* warm raised surface, hover rows */
+  --secondary-muted: #7A7066;    /* secondary text */
+
+  /* Neutral surfaces */
+  --ds-bg: #FAF6EE;
+  --ds-surface: #FFFFFF;
+  --ds-line: #ECE3D6;
+  --ds-line-strong: #D9CEBF;
+
+  /* Design-system aliases (names used on the design canvas) */
+  --ds-accent: var(--primary);
+  --ds-accent-hover: var(--primary-hover);
+  --ds-accent-ink: var(--primary-ink);
+  --ds-accent-soft: var(--primary-soft);
+  --ds-accent-soft-ink: var(--primary-soft-ink);
+  --ds-ink: var(--secondary);
+  --ds-ink-muted: var(--secondary-muted);
+  --ds-surface-warm: var(--secondary-soft);
+
+  /* Semantic (kept separate from the brand colours) */
+  --ds-ok: #3F7A54;
+  --ds-ok-soft: #E3F0E7;
+  --ds-ok-soft-ink: #2C5B3C;
+  --ds-warn: #B6791F;
+  --ds-warn-soft: #F6EAD2;
+  --ds-warn-soft-ink: #7C5410;
+  --ds-danger: #C0392B;
+  --ds-danger-soft: #F6E0DD;
+  --ds-danger-soft-ink: #8A2A22;
+
+  /* Spacing (4px base) */
+  --ds-space-1: 4px;
+  --ds-space-2: 8px;
+  --ds-space-3: 12px;
+  --ds-space-4: 16px;
+  --ds-space-5: 24px;
+  --ds-space-6: 32px;
+  --ds-space-8: 48px;
+
+  /* Elevation — borders over shadows */
+  --ds-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --ds-shadow-2: 0 4px 12px -6px rgba(0, 0, 0, 0.14);
+  --ds-shadow-3: 0 14px 32px -16px rgba(0, 0, 0, 0.24);
+
+  /* Radius & type */
+  --ds-radius: 8px;
+  --ds-radius-sm: 6px;
+  --ds-radius-lg: 16px;
+  --ds-radius-pill: 999px;
+  --ds-font: "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --ds-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}

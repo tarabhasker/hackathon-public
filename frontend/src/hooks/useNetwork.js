@@ -5,7 +5,8 @@ import { evidenceIndex, pathTo } from '../lib/network'
 const EMPTY = { nodes: [], edges: [] }
 
 // The signed-in person's neighbourhood graph plus the current selection.
-export function useNetwork(meId) {
+// Whose network it is comes from the auth token, not a parameter.
+export function useNetwork() {
   const [net, setNet] = useState(null)
   const [selected, setSelected] = useState(null) // person-like {id, name, title, org_unit}
   const [error, setError] = useState(null)
@@ -15,9 +16,8 @@ export function useNetwork(meId) {
   }, [net])
 
   const load = useCallback(
-    (focusId) =>
-      api(`/api/network?requester_id=${meId}${focusId ? `&focus_id=${focusId}` : ''}`),
-    [meId],
+    (focusId) => api(`/api/network${focusId ? `?focus_id=${focusId}` : ''}`),
+    [],
   )
 
   useEffect(() => {

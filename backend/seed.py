@@ -195,32 +195,44 @@ def make_edges(people):
 
 
 def embed_all(conn):
-    from google import genai  # noqa: deferred so the base seed needs no key
+    import llm  # deferred so the base seed needs no key
 
-    api_key = os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
+    if not os.environ.get("GOOGLE_API_KEY"):
         raise SystemExit("GOOGLE_API_KEY is not set (backend/.env) — cannot embed.")
-    client = genai.Client(api_key=api_key)
 
     rows = conn.execute(
         text("SELECT id, text FROM facets WHERE embedding IS NULL ORDER BY id")
     ).all()
-    print(f"Embedding {len(rows)} facets with text-embedding-004…")
-    BATCH = 100
+    print(f"Embedding {len(rows)} facets with {llm.EMBED_MODEL}…", flush=True)
+    # Free tier allows 100 embed requests/min and each text counts as one,
+    # so stay under it and wait out any 429 we hit anyway. Resumable: only
+    # NULL-embedding rows are selected, so a rerun picks up where this left off.
+    import time
+
+    BATCH = 95
     for i in range(0, len(rows), BATCH):
         batch = rows[i:i + BATCH]
-        result = client.models.embed_content(
-            model="text-embedding-004",
-            contents=[r.text for r in batch],
-        )
-        for row, emb in zip(batch, result.embeddings):
-            vec = "[" + ",".join(f"{v:.6f}" for v in emb.values) + "]"
+        while True:
+            try:
+                vectors = llm.embed_texts([r.text for r in batch])
+                break
+            except Exception as e:
+                if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                    print("  rate limited — waiting 25s…", flush=True)
+                    time.sleep(25)
+                else:
+                    raise
+        for row, emb in zip(batch, vectors):
+            vec = "[" + ",".join(f"{v:.6f}" for v in emb) + "]"
             conn.execute(
-                text("UPDATE facets SET embedding = :v::vector WHERE id = :id"),
+                text("UPDATE facets SET embedding = :v ::vector WHERE id = :id"),
                 {"v": vec, "id": row.id},
             )
         conn.commit()
-        print(f"  {min(i + BATCH, len(rows))}/{len(rows)}")
+        done = min(i + BATCH, len(rows))
+        print(f"  {done}/{len(rows)}", flush=True)
+        if done < len(rows):
+            time.sleep(61)  # stay under the per-minute request quota
 
 
 def main():

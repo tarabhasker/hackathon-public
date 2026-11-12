@@ -33,6 +33,29 @@ export function Eyebrow({ as: Tag = 'h2', className = '', children }) {
   return <Tag className={`ui-eyebrow ${className}`}>{children}</Tag>
 }
 
+// Animated loading spinner; inherits text colour.
+export function Spinner({ size = 16, className = '' }) {
+  return (
+    <svg
+      className={`ui-spinner ${className}`}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      role="status"
+      aria-label="Loading"
+    >
+      <circle cx="12" cy="12" r="9.5" stroke="currentColor" strokeOpacity="0.25" strokeWidth="3" />
+      <path
+        d="M21.5 12a9.5 9.5 0 0 0-9.5-9.5"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
 // Inline status message. tone: 'danger' | 'ok' | 'warn'
 export function Notice({ tone = 'danger', children }) {
   return (

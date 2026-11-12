@@ -10,6 +10,12 @@ import secrets
 import time
 
 SECRET = os.environ.get("SECRET_KEY", "dev-only-secret-change-me").encode()
+if SECRET == b"dev-only-secret-change-me":
+    print(
+        "WARNING: SECRET_KEY is the dev default — tokens are forgeable. "
+        "Set SECRET_KEY in backend/.env before deploying.",
+        flush=True,
+    )
 TOKEN_TTL = 7 * 24 * 3600
 ITERATIONS = 200_000
 

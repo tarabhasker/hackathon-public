@@ -5,6 +5,7 @@ import { ToastProvider } from './components/ui'
 import { AuthProvider } from './hooks/useAuth'
 import { Register, SignIn } from './pages/AuthForm'
 import Network from './pages/Network'
+import Profile from './pages/Profile'
 import Quiz from './pages/Quiz'
 import Setup from './pages/Setup'
 
@@ -24,6 +25,8 @@ export default function App() {
             <Route element={<RequireProfile />}>
               <Route element={<AppShell />}>
                 <Route index element={<Network />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/people/:id" element={<Profile />} />
                 <Route path="/quiz" element={<Quiz />} />
               </Route>
             </Route>

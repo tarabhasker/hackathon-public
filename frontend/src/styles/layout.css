@@ -73,6 +73,8 @@
   border-top: 1px solid var(--ds-line);
   min-width: 0;
 }
+.shell-nav__me { color: inherit; text-decoration: none; border-radius: var(--ds-radius); }
+.shell-nav__me:hover { background: var(--secondary-soft); }
 .shell-nav__metext { display: flex; flex-direction: column; min-width: 0; }
 .shell-nav__mename { font-weight: 500; font-size: 15px; }
 .shell-nav__meemail {
@@ -108,7 +110,7 @@
     bottom: 0;
     z-index: 20;
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     padding: 6px 8px calc(10px + env(safe-area-inset-bottom));
     border-top: 1px solid var(--ds-line);
     background: var(--ds-surface);

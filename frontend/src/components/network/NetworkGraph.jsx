@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { assetUrl } from '../../api'
 import { GRAPH_H, GRAPH_W, initials, layoutNodes } from '../../lib/network'
 
 // Fills for people who aren't on the highlighted path (--avatar-1..6 in tokens.css)
@@ -58,7 +59,7 @@ function Node({ node, index, at, role, onSelect }) {
             animationDelay: `${index * 0.23}s`,
           }}
         >
-          {label}
+          {node.avatar_url ? <img className="nw-node__img" src={assetUrl(node.avatar_url)} alt="" draggable="false" /> : label}
         </span>
       </span>
       <span className="nw-node__label">{role === 'you' ? 'You' : node.name}</span>

@@ -4,7 +4,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import create_engine, text
@@ -73,6 +73,15 @@ class Credentials(BaseModel):
     password: str
 
 
+class ProfileUpdate(BaseModel):
+    name: str
+    title: str = ""
+    org_unit: str = ""
+    skills: list[str] = []
+    ask: str = ""
+    offer: str = ""
+
+
 class EmployerIn(BaseModel):
     org: str
     start_year: int | None = None
@@ -132,7 +141,7 @@ def submit_quiz(entry: QuizEntry):
 def _user_payload(conn, user_id: int) -> dict | None:
     row = conn.execute(
         text(
-            "SELECT u.id, u.email, p.id AS pid, p.name, p.title, p.org_unit "
+            "SELECT u.id, u.email, p.id AS pid, p.name, p.title, p.org_unit, p.avatar_key "
             "FROM users u LEFT JOIN people p ON p.id = u.person_id WHERE u.id = :id"
         ),
         {"id": user_id},
@@ -141,8 +150,18 @@ def _user_payload(conn, user_id: int) -> dict | None:
         return None
     person = None
     if row.pid is not None:
-        person = {"id": row.pid, "name": row.name, "title": row.title, "org_unit": row.org_unit}
+        person = {
+            "id": row.pid,
+            "name": row.name,
+            "title": row.title,
+            "org_unit": row.org_unit,
+            "avatar_url": _avatar_url(row.avatar_key),
+        }
     return {"id": row.id, "email": row.email, "person": person}
+
+
+def _avatar_url(key: str | None) -> str | None:
+    return f"/api/avatars/{key}" if key else None
 
 
 def _user_id(authorization: str | None) -> int | None:
@@ -238,11 +257,15 @@ def list_people(authorization: str | None = Header(default=None)):
     with engine.connect() as conn:
         rows = conn.execute(
             text(
-                "SELECT id, name, title, org_unit, is_real FROM people "
+                "SELECT id, name, title, org_unit, is_real, avatar_key FROM people "
                 "ORDER BY is_real DESC, name"
             )
         ).mappings().all()
-    return [dict(r) for r in rows]
+    return [
+        {k: r[k] for k in ("id", "name", "title", "org_unit", "is_real")}
+        | {"avatar_url": _avatar_url(r["avatar_key"])}
+        for r in rows
+    ]
 
 
 @app.post("/api/search")
@@ -269,6 +292,234 @@ def get_network(
     person_id = _require_person(authorization)
     with engine.connect() as conn:
         return matching.network(conn, person_id, focus_id)
+
+
+# --- Profiles ---------------------------------------------------------------------
+
+MAX_AVATAR_BYTES = 1024 * 1024  # the client resizes to 256px first, so this is generous
+AVATAR_SIGNATURES = {
+    "image/jpeg": (b"\xff\xd8\xff",),
+    "image/png": (b"\x89PNG\r\n\x1a\n",),
+    "image/webp": (b"RIFF",),
+}
+
+
+# Filler that setup stores when a field was left blank; not real profile content
+PLACEHOLDER_TEXT = {
+    "general problem solving",
+    "Open to learning from others.",
+    "Happy to help with their area.",
+}
+
+
+def _split_skills(raw: str | None) -> list[str]:
+    return [
+        s.strip() for s in (raw or "").split(",")
+        if s.strip() and s.strip() not in PLACEHOLDER_TEXT
+    ]
+
+
+def _real_text(value: str | None) -> str:
+    return "" if not value or value in PLACEHOLDER_TEXT else value
+
+
+def _expertise_text(title: str, org_unit: str | None, skills: list[str], projects: list[str]) -> str:
+    body = f"{title} in {org_unit or 'their field'}. Skilled in {', '.join(skills) or 'general problem solving'}."
+    if projects:
+        body += f" Worked on projects {', '.join(projects)}."
+    return body
+
+
+@app.get("/api/people/{person_id}")
+def get_profile(person_id: int, authorization: str | None = Header(default=None)):
+    """A person's profile, plus how the signed-in person is connected to them."""
+    import engine as matching
+
+    me = _require_person(authorization)
+    with engine.connect() as conn:
+        person = conn.execute(
+            text(
+                "SELECT id, name, title, org_unit, ask_me_about, avatar_key "
+                "FROM people WHERE id = :id"
+            ),
+            {"id": person_id},
+        ).first()
+        if person is None:
+            raise HTTPException(status_code=404, detail="That person isn't in the network")
+
+        facets = dict(
+            conn.execute(
+                text(
+                    "SELECT kind, text FROM facets WHERE person_id = :id "
+                    "AND kind IN ('ask', 'offer') ORDER BY id"
+                ),
+                {"id": person_id},
+            ).all()
+        )
+        projects = conn.execute(
+            text(
+                "SELECT DISTINCT project FROM project_memberships "
+                "WHERE person_id = :id ORDER BY project"
+            ),
+            {"id": person_id},
+        ).scalars().all()
+
+        # Strongest path from me to them, with the reason for each link
+        path = []
+        if person_id != me:
+            found = matching.strongest_path(matching.load_graph(conn), me, person_id)
+            if found:
+                ids = found[0]
+                rows = {
+                    r.id: r
+                    for r in conn.execute(
+                        text("SELECT id, name, title, avatar_key FROM people WHERE id = ANY(:ids)"),
+                        {"ids": ids},
+                    )
+                }
+                for prev, cur in zip([None] + ids, ids):
+                    r = rows[cur]
+                    path.append(
+                        {
+                            "id": cur,
+                            "name": r.name,
+                            "title": r.title,
+                            "avatar_url": _avatar_url(r.avatar_key),
+                            "evidence": matching._edge_info(conn, prev, cur)["evidence"]
+                            if prev is not None
+                            else None,
+                        }
+                    )
+
+    return {
+        "id": person.id,
+        "name": person.name,
+        "title": person.title,
+        "org_unit": person.org_unit,
+        "skills": _split_skills(person.ask_me_about),
+        "projects": projects,
+        "ask": _real_text(facets.get("ask")),
+        "offer": _real_text(facets.get("offer")),
+        "avatar_url": _avatar_url(person.avatar_key),
+        "is_me": person_id == me,
+        "hops": max(len(path) - 1, 0),
+        "path": path,
+    }
+
+
+@app.put("/api/profile")
+def update_profile(body: ProfileUpdate, authorization: str | None = Header(default=None)):
+    """Edit your own profile. Whose profile comes from the token, never the request."""
+    import llm
+
+    me = _require_person(authorization)
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Your name can't be empty")
+    title = body.title.strip()
+    org_unit = body.org_unit.strip() or None
+    skills = [s.strip() for s in body.skills if s.strip()][:30]
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE people SET name = :n, title = :t, org_unit = :u, ask_me_about = :a "
+                "WHERE id = :id"
+            ),
+            {"n": name, "t": title, "u": org_unit, "a": ", ".join(skills)[:500], "id": me},
+        )
+        projects = conn.execute(
+            text("SELECT DISTINCT project FROM project_memberships WHERE person_id = :id"),
+            {"id": me},
+        ).scalars().all()
+
+        # Keep the searchable text in step with the profile; re-embed when possible
+        facet_rows = [
+            ("expertise", _expertise_text(title, org_unit, skills, projects)),
+            ("ask", body.ask.strip()),
+            ("offer", body.offer.strip()),
+        ]
+        vectors = None
+        try:
+            vectors = llm.embed_texts([t or "-" for _, t in facet_rows])
+        except Exception:
+            vectors = None  # no key / API hiccup: keyword search still works
+        conn.execute(
+            text("DELETE FROM facets WHERE person_id = :id AND kind IN ('expertise', 'ask', 'offer')"),
+            {"id": me},
+        )
+        for i, (kind, value) in enumerate(facet_rows):
+            if not value:
+                continue
+            if vectors:
+                vec = "[" + ",".join(f"{v:.6f}" for v in vectors[i]) + "]"
+                conn.execute(
+                    text(
+                        "INSERT INTO facets (person_id, kind, text, embedding) "
+                        "VALUES (:id, :k, :t, :v ::vector)"
+                    ),
+                    {"id": me, "k": kind, "t": value, "v": vec},
+                )
+            else:
+                conn.execute(
+                    text("INSERT INTO facets (person_id, kind, text) VALUES (:id, :k, :t)"),
+                    {"id": me, "k": kind, "t": value},
+                )
+    return get_profile(me, authorization)
+
+
+@app.put("/api/profile/avatar")
+async def upload_avatar(file: UploadFile, authorization: str | None = Header(default=None)):
+    import secrets
+
+    me = _require_person(authorization)
+    signatures = AVATAR_SIGNATURES.get(file.content_type or "")
+    if signatures is None:
+        raise HTTPException(status_code=400, detail="Upload a JPEG, PNG or WebP image")
+    data = await file.read(MAX_AVATAR_BYTES + 1)
+    if len(data) > MAX_AVATAR_BYTES:
+        raise HTTPException(status_code=400, detail="That image is too large (max 1 MB)")
+    if not data.startswith(signatures):
+        raise HTTPException(status_code=400, detail="That file doesn't look like an image")
+
+    key = secrets.token_urlsafe(16)
+    with engine.begin() as conn:
+        conn.execute(
+            text("UPDATE people SET avatar = :d, avatar_type = :t, avatar_key = :k WHERE id = :id"),
+            {"d": data, "t": file.content_type, "k": key, "id": me},
+        )
+    return {"avatar_url": _avatar_url(key)}
+
+
+@app.delete("/api/profile/avatar")
+def delete_avatar(authorization: str | None = Header(default=None)):
+    me = _require_person(authorization)
+    with engine.begin() as conn:
+        conn.execute(
+            text("UPDATE people SET avatar = NULL, avatar_type = NULL, avatar_key = NULL WHERE id = :id"),
+            {"id": me},
+        )
+    return {"avatar_url": None}
+
+
+@app.get("/api/avatars/{key}")
+def get_avatar(key: str):
+    """Serve a profile photo. No token needed (an <img> can't send one); the
+    random key in the URL is the access control and changes on every upload."""
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT avatar, avatar_type FROM people WHERE avatar_key = :k"), {"k": key}
+        ).first()
+    if row is None or row.avatar is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    return Response(
+        content=bytes(row.avatar),
+        media_type=row.avatar_type,
+        headers={
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @app.post("/api/intake/cv")

@@ -7,8 +7,11 @@ Everything degrades gracefully when GOOGLE_API_KEY is absent:
 import json
 import os
 
-EMBED_MODEL = "text-embedding-004"
-GEN_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+EMBED_MODEL = os.environ.get("GEMINI_EMBED_MODEL", "gemini-embedding-001")
+EMBED_DIM = 768  # must match vector(768) in the facets schema
+GEN_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
+# Tried in order when the preferred model is overloaded (503) or retired (404)
+GEN_FALLBACKS = [GEN_MODEL, "gemini-3.6-flash", "gemini-3.5-flash"]
 
 
 class LLMUnavailable(Exception):
@@ -23,12 +26,36 @@ def _client():
     return genai.Client(api_key=api_key)
 
 
+def _generate(client, contents, config=None):
+    """generate_content with model fallbacks for overload/retirement errors."""
+    from google.genai import errors
+
+    last = None
+    for model in GEN_FALLBACKS:
+        try:
+            return client.models.generate_content(
+                model=model, contents=contents, config=config
+            )
+        except errors.APIError as e:
+            last = e
+            if getattr(e, "code", None) in (404, 429, 503):
+                continue  # try the next model
+            raise
+    raise last
+
+
 def embed_texts(texts: list[str]) -> list[list[float]] | None:
     """Embed up to 100 texts; None when no API key is configured."""
     client = _client()
     if client is None:
         return None
-    result = client.models.embed_content(model=EMBED_MODEL, contents=texts)
+    from google.genai import types
+
+    result = client.models.embed_content(
+        model=EMBED_MODEL,
+        contents=texts,
+        config=types.EmbedContentConfig(output_dimensionality=EMBED_DIM),
+    )
     return [list(e.values) for e in result.embeddings]
 
 
@@ -63,11 +90,7 @@ def parse_cv(raw_text: str | None = None, pdf_bytes: bytes | None = None) -> dic
     else:
         contents = CV_PROMPT + "\nCV text:\n" + raw_text[:30000]
 
-    response = client.models.generate_content(
-        model=GEN_MODEL,
-        contents=contents,
-        config={"response_mime_type": "application/json"},
-    )
+    response = _generate(client, contents, config={"response_mime_type": "application/json"})
     return json.loads(response.text)
 
 
@@ -77,11 +100,9 @@ def draft_why(query: str, person_summary: str, path_names: list[str]) -> str | N
     if client is None:
         return None
     via = " -> ".join(path_names) if path_names else "a direct connection"
-    response = client.models.generate_content(
-        model=GEN_MODEL,
-        contents=(
-            "In one short sentence (max 20 words), explain why this person fits the ask "
-            f"and mention the intro path.\nAsk: {query}\nPerson: {person_summary}\nPath: {via}"
-        ),
+    response = _generate(
+        client,
+        "In one short sentence (max 20 words), explain why this person fits the ask "
+        f"and mention the intro path.\nAsk: {query}\nPerson: {person_summary}\nPath: {via}",
     )
     return response.text.strip()

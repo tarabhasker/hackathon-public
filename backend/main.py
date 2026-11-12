@@ -284,18 +284,22 @@ async def intake_cv(file: UploadFile, authorization: str | None = Header(default
         reader = PdfReader(BytesIO(data))
         raw_text = "\n".join((page.extract_text() or "") for page in reader.pages).strip()
     except Exception:
-        raise HTTPException(status_code=400, detail="Could not read that PDF")
-    if len(raw_text) < 50:
-        raise HTTPException(status_code=400, detail="No readable text in that PDF")
+        raw_text = ""  # unreadable text layer — Gemini can still read the PDF itself
 
     try:
-        parsed = llm.parse_cv(raw_text)
+        if len(raw_text) >= 50:
+            parsed = llm.parse_cv(raw_text=raw_text)
+        else:
+            # Scanned or image-based CV: no text layer, so let Gemini read the document
+            parsed = llm.parse_cv(pdf_bytes=data)
     except llm.LLMUnavailable as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception:
         raise HTTPException(status_code=502, detail="CV parsing failed — try again")
 
-    parsed["raw_text"] = raw_text
+    parsed["raw_text"] = raw_text if len(raw_text) >= 50 else (
+        "(scanned PDF, parsed visually) " + str(parsed.get("summary") or "")
+    )
     return parsed
 
 

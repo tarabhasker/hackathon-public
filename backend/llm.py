@@ -44,18 +44,28 @@ Return ONLY a JSON object with exactly these keys:
 - ask: string (one sentence: what they likely want to learn or need help with, inferred)
 - offer: string (one sentence: what they can help others with)
 - summary: string (2 sentences describing their expertise)
-
-CV text:
 """
 
 
-def parse_cv(raw_text: str) -> dict:
+def parse_cv(raw_text: str | None = None, pdf_bytes: bytes | None = None) -> dict:
+    """Parse a CV from extracted text, or from the PDF itself (scanned/image CVs)."""
     client = _client()
     if client is None:
         raise LLMUnavailable("GOOGLE_API_KEY is not set in backend/.env")
+
+    if pdf_bytes is not None:
+        from google.genai import types
+
+        contents = [
+            types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
+            CV_PROMPT + "\nThe CV is the attached document.",
+        ]
+    else:
+        contents = CV_PROMPT + "\nCV text:\n" + raw_text[:30000]
+
     response = client.models.generate_content(
         model=GEN_MODEL,
-        contents=CV_PROMPT + raw_text[:30000],
+        contents=contents,
         config={"response_mime_type": "application/json"},
     )
     return json.loads(response.text)

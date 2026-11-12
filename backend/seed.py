@@ -254,6 +254,23 @@ def main():
             ).scalar_one()
             id_map[p["i"]] = pid
 
+            for org, s, e in p["employers"]:
+                conn.execute(
+                    text(
+                        "INSERT INTO positions (person_id, org, started_year, ended_year) "
+                        "VALUES (:id, :org, :s, :e)"
+                    ),
+                    {"id": pid, "org": org, "s": s, "e": e},
+                )
+            for proj, s, e in p["projects"]:
+                conn.execute(
+                    text(
+                        "INSERT INTO project_memberships (person_id, project, started_year, ended_year) "
+                        "VALUES (:id, :proj, :s, :e)"
+                    ),
+                    {"id": pid, "proj": proj, "s": s, "e": e},
+                )
+
             expertise, ask, offer = facet_texts(p)
             conn.execute(
                 text(

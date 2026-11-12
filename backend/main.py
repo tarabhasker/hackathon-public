@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -57,6 +57,32 @@ class QuizEntry(BaseModel):
     favourite_food: str
 
 
+class SearchRequest(BaseModel):
+    query: str
+    requester_id: int
+    limit: int = 5
+
+
+class EmployerIn(BaseModel):
+    org: str
+    start_year: int | None = None
+    end_year: int | None = None
+
+
+class ConfirmProfile(BaseModel):
+    name: str
+    title: str
+    org_unit: str | None = None
+    email: str | None = None
+    skills: list[str] = []
+    employers: list[EmployerIn] = []
+    projects: list[str] = []
+    ask: str | None = None
+    offer: str | None = None
+    summary: str | None = None
+    raw_text: str = ""
+
+
 # --- API ------------------------------------------------------------------------
 
 @app.get("/api/health")
@@ -89,6 +115,154 @@ def submit_quiz(entry: QuizEntry):
         total = conn.execute(text("SELECT COUNT(*) FROM quiz_entries")).scalar_one()
 
     return {"house": house, "entry_number": total}
+
+
+# --- 6 Degrees API ----------------------------------------------------------------
+
+@app.get("/api/people")
+def list_people():
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT id, name, title, org_unit, is_real FROM people "
+                "ORDER BY is_real DESC, name"
+            )
+        ).mappings().all()
+    return [dict(r) for r in rows]
+
+
+@app.post("/api/search")
+def search_people(req: SearchRequest):
+    import engine as matching
+
+    query = req.query.strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="'query' must not be empty")
+    with engine.connect() as conn:
+        exists = conn.execute(
+            text("SELECT 1 FROM people WHERE id = :id"), {"id": req.requester_id}
+        ).first()
+        if not exists:
+            raise HTTPException(status_code=404, detail="requester not found")
+        results = matching.search(conn, query, req.requester_id, limit=min(req.limit, 20))
+    return {"query": query, "results": results}
+
+
+@app.post("/api/intake/cv")
+async def intake_cv(file: UploadFile):
+    from io import BytesIO
+
+    from pypdf import PdfReader
+
+    import llm
+
+    if file.content_type not in ("application/pdf", "application/octet-stream"):
+        raise HTTPException(status_code=400, detail="Upload a PDF file")
+    data = await file.read()
+    if len(data) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large (max 10 MB)")
+    try:
+        reader = PdfReader(BytesIO(data))
+        raw_text = "\n".join((page.extract_text() or "") for page in reader.pages).strip()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Could not read that PDF")
+    if len(raw_text) < 50:
+        raise HTTPException(status_code=400, detail="No readable text in that PDF")
+
+    try:
+        parsed = llm.parse_cv(raw_text)
+    except llm.LLMUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=502, detail="CV parsing failed — try again")
+
+    parsed["raw_text"] = raw_text
+    return parsed
+
+
+@app.post("/api/intake/confirm", status_code=201)
+def intake_confirm(profile: ConfirmProfile):
+    import engine as matching
+    import llm
+
+    name = profile.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="'name' is required")
+
+    skills = ", ".join(profile.skills) or "general problem solving"
+    projects = ", ".join(profile.projects)
+    expertise = f"{profile.title} in {profile.org_unit or 'their field'}. Skilled in {skills}."
+    if projects:
+        expertise += f" Worked on projects {projects}."
+    if profile.summary:
+        expertise += f" {profile.summary}"
+    ask = profile.ask or "Open to learning from others."
+    offer = profile.offer or f"Happy to help with {profile.skills[0] if profile.skills else 'their area'}."
+
+    with engine.begin() as conn:
+        pid = conn.execute(
+            text(
+                "INSERT INTO people (name, title, org_unit, email, ask_me_about, is_real) "
+                "VALUES (:n, :t, :u, :e, :a, true) RETURNING id"
+            ),
+            {"n": name, "t": profile.title, "u": profile.org_unit, "e": profile.email,
+             "a": skills[:200]},
+        ).scalar_one()
+
+        if profile.raw_text:
+            conn.execute(
+                text(
+                    "INSERT INTO profiles_raw (person_id, source, raw_text) "
+                    "VALUES (:id, 'cv', :raw)"
+                ),
+                {"id": pid, "raw": profile.raw_text},
+            )
+        for emp in profile.employers:
+            conn.execute(
+                text(
+                    "INSERT INTO positions (person_id, org, started_year, ended_year) "
+                    "VALUES (:id, :org, :s, :e)"
+                ),
+                {"id": pid, "org": emp.org, "s": emp.start_year, "e": emp.end_year},
+            )
+        for proj in profile.projects:
+            conn.execute(
+                text(
+                    "INSERT INTO project_memberships (person_id, project) VALUES (:id, :p)"
+                ),
+                {"id": pid, "p": proj},
+            )
+
+        facet_rows = [("expertise", expertise), ("ask", ask), ("offer", offer)]
+        vectors = None
+        try:
+            vectors = llm.embed_texts([t for _, t in facet_rows])
+        except Exception:
+            vectors = None
+        for i, (kind, body) in enumerate(facet_rows):
+            if vectors:
+                vec = "[" + ",".join(f"{v:.6f}" for v in vectors[i]) + "]"
+                conn.execute(
+                    text(
+                        "INSERT INTO facets (person_id, kind, text, embedding) "
+                        "VALUES (:id, :k, :t, :v ::vector)"
+                    ),
+                    {"id": pid, "k": kind, "t": body, "v": vec},
+                )
+            else:
+                conn.execute(
+                    text("INSERT INTO facets (person_id, kind, text) VALUES (:id, :k, :t)"),
+                    {"id": pid, "k": kind, "t": body},
+                )
+
+        edges_created = matching.build_edges_for_person(conn, pid)
+
+    return {
+        "id": pid,
+        "name": name,
+        "edges_created": edges_created,
+        "embedded": vectors is not None,
+    }
 
 
 # --- Frontend (production only) -------------------------------------------------

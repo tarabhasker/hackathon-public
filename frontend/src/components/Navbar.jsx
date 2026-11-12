@@ -7,7 +7,7 @@ export default function Navbar() {
       <div className="container">
         <Link className="navbar-brand" to="/">
           <span className="brand-mark" aria-hidden="true"></span>
-          Hackathon
+          6 Degrees
         </Link>
         <button
           className="navbar-toggler"
@@ -24,6 +24,12 @@ export default function Navbar() {
           <ul className="navbar-nav ms-auto align-items-lg-center">
             <li className="nav-item">
               <NavLink className="nav-link" to="/" end>Home</NavLink>
+            </li>
+            <li className="nav-item">
+              <NavLink className="nav-link" to="/search">Search</NavLink>
+            </li>
+            <li className="nav-item">
+              <NavLink className="nav-link" to="/add">Add profile</NavLink>
             </li>
             <li className="nav-item">
               <NavLink className="nav-link" to="/quiz">Quiz</NavLink>

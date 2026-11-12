@@ -21,22 +21,24 @@ export default function Home() {
       <div className="hero-orb two" aria-hidden="true"></div>
       <div className="container">
         <h1>
-          Three questions.
+          Someone you know
           <br />
-          <span className="gradient-text">One destiny.</span>
+          <span className="gradient-text">knows the answer.</span>
         </h1>
         <p className="lead">
-          Tell us your name, your age and your favourite food — our deeply
-          scientific sorting algorithm will reveal who you truly are.
+          Ask for the help you need in plain language. 6 Degrees finds the right
+          person and the warmest path of introductions to reach them — ranked by
+          how well people actually know each other, not just hops.
         </p>
         <div>
           <span className="status-row">
             <span className={`status-dot ${ok ? 'ok' : offline ? 'offline' : ''}`}></span>
-            {ok ? 'Sorting Hat connected' : offline ? 'Sorting Hat offline' : 'Waking the Sorting Hat…'}
+            {ok ? 'Network online' : offline ? 'Network offline' : 'Connecting…'}
           </span>
         </div>
         <div className="cta">
-          <Link to="/quiz" className="btn btn-gradient btn-lg">Take the quiz ✨</Link>
+          <Link to="/search" className="btn btn-gradient btn-lg">Find someone</Link>
+          <Link to="/add" className="btn btn-ghost btn-lg ms-2">Join the network</Link>
         </div>
       </div>
     </header>

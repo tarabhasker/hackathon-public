@@ -10,3 +10,4 @@ numpy>=1.26
 pypdf>=4.0
 google-genai>=1.0
 pgvector>=0.2
+python-multipart>=0.0.9

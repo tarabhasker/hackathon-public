@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
 import { GRAPH_H, GRAPH_W, initials, layoutNodes } from '../../lib/network'
 
-// Decorative fills for people who aren't on the highlighted path
-const PASTELS = ['#FBE3DF', '#FFF1C9', '#DDEFE3', '#DCE8F7', '#EDE3F7', '#FDE7D2']
+// Fills for people who aren't on the highlighted path (--avatar-1..6 in tokens.css)
+const AVATAR_FILLS = 6
 
 const pct = (value, total) => `${(value / total) * 100}%`
 
@@ -53,7 +53,7 @@ function Node({ node, index, at, role, onSelect }) {
             width: size,
             height: size,
             fontSize: role === 'you' ? 13 : node.depth === 1 ? 12 : 11,
-            background: role === 'other' ? PASTELS[index % PASTELS.length] : undefined,
+            background: role === 'other' ? `var(--avatar-${(index % AVATAR_FILLS) + 1})` : undefined,
             animationDuration: `${2.8 + (index % 4) * 0.4}s`,
             animationDelay: `${index * 0.23}s`,
           }}

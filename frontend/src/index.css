@@ -69,7 +69,7 @@ a:hover { color: var(--primary-hover); }
   color: #fff;
   font-weight: 600;
   padding: 0.7rem 1.8rem;
-  border-radius: var(--ds-radius-sm);
+  border-radius: var(--ds-radius-button);
   transition: background-color 0.15s ease;
 }
 

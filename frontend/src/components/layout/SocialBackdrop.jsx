@@ -2,12 +2,15 @@ import { useEffect, useRef } from 'react'
 
 // Animated "people finding each other" backdrop: drifting avatar bubbles that
 // link up when they come close, with messages travelling along the links.
+// Bubbles steer around any element marked `data-backdrop-avoid` inside the
+// nearest `data-backdrop-host`
+// (the logo and the headline), so they never sit on top of text.
 // Purely decorative. Brand colours are read from the theme tokens, and the
 // animation is replaced by a single still frame under prefers-reduced-motion.
 
 const INITIALS = ['NA', 'WL', 'HR', 'SL', 'AN', 'JT', 'DK', 'PS', 'KM', 'RB', 'EL', 'TM', 'YB', 'CM', 'AS', 'TF']
-const PASTELS = ['#FBE3DF', '#FFF1C9', '#DDEFE3', '#DCE8F7', '#EDE3F7', '#FDE7D2']
 const LINK_DISTANCE = 190
+const MAX_RINGS = 3
 const rand = (min, max) => min + Math.random() * (max - min)
 
 export default function SocialBackdrop({ className = '' }) {
@@ -16,11 +19,17 @@ export default function SocialBackdrop({ className = '' }) {
   useEffect(() => {
     const canvas = ref.current
     const ctx = canvas.getContext('2d')
-    const tokens = getComputedStyle(document.documentElement)
-    const primary = tokens.getPropertyValue('--primary').trim() || '#9E3B33'
-    const primaryInk = tokens.getPropertyValue('--primary-ink').trim() || '#FFFFFF'
-    const ink = tokens.getPropertyValue('--secondary').trim() || '#1B1613'
-    const font = tokens.getPropertyValue('--ds-font').trim() || 'sans-serif'
+    let primary, primaryInk, ink, font
+    let fills = []
+    function readTokens() {
+      const tokens = getComputedStyle(document.documentElement)
+      primary = tokens.getPropertyValue('--primary').trim() || '#9E3B33'
+      primaryInk = tokens.getPropertyValue('--primary-ink').trim() || '#FFFFFF'
+      ink = tokens.getPropertyValue('--secondary').trim() || '#1B1613'
+      font = tokens.getPropertyValue('--ds-font').trim() || 'sans-serif'
+      fills = [1, 2, 3, 4, 5, 6].map((i) => tokens.getPropertyValue(`--avatar-${i}`).trim() || '#EEEEEE')
+    }
+    readTokens()
     const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
     let width = 0
@@ -31,21 +40,76 @@ export default function SocialBackdrop({ className = '' }) {
     let frame = 0
     let last = 0
     let sincePulse = 0
+    let avoid = [] // keep-out rects, in canvas coordinates
+    let sinceAvoid = 0
+
+    const AVOID_GAP = 14 // clearance between a bubble and a keep-out rect
+
+    function readAvoid() {
+      const origin = canvas.getBoundingClientRect()
+      const host = canvas.closest('[data-backdrop-host]') || canvas.parentElement
+      avoid = [...host.querySelectorAll('[data-backdrop-avoid]')].map((el) => {
+        const r = el.getBoundingClientRect()
+        return { l: r.left - origin.left, t: r.top - origin.top, r: r.right - origin.left, b: r.bottom - origin.top }
+      })
+    }
+
+    const insideAvoid = (x, y, radius) =>
+      avoid.some((a) => x > a.l - radius - AVOID_GAP && x < a.r + radius + AVOID_GAP && y > a.t - radius - AVOID_GAP && y < a.b + radius + AVOID_GAP)
+
+    // Push a bubble out of any keep-out rect through the nearest edge that
+    // keeps it on the canvas, and send it moving away from the rect.
+    function pushOut(n) {
+      for (const a of avoid) {
+        const pad = n.r + AVOID_GAP
+        const L = a.l - pad
+        const R = a.r + pad
+        const T = a.t - pad
+        const B = a.b + pad
+        if (!(n.x > L && n.x < R && n.y > T && n.y < B)) continue
+        const exits = [
+          { d: n.x - L, x: L, y: n.y, vx: -1, vy: 0 },
+          { d: R - n.x, x: R, y: n.y, vx: 1, vy: 0 },
+          { d: n.y - T, x: n.x, y: T, vx: 0, vy: -1 },
+          { d: B - n.y, x: n.x, y: B, vx: 0, vy: 1 },
+        ]
+          .filter((e) => e.x >= n.r && e.x <= width - n.r && e.y >= n.r && e.y <= height - n.r)
+          .sort((p, q) => p.d - q.d)
+        const exit = exits[0]
+        if (!exit) continue
+        n.x = exit.x
+        n.y = exit.y
+        if (exit.vx) n.vx = exit.vx * Math.abs(n.vx || 8)
+        if (exit.vy) n.vy = exit.vy * Math.abs(n.vy || 8)
+      }
+    }
 
     function seed() {
       const compact = height < 260 // phone banner: fewer, smaller bubbles
       const count = Math.max(5, Math.min(30, Math.round((width * height) / 30000)))
-      nodes = Array.from({ length: count }, (_, i) => ({
-        x: rand(40, width - 40),
-        y: rand(40, height - 40),
-        vx: rand(-12, 12),
-        vy: rand(-12, 12),
-        r: compact ? rand(12, 18) : rand(15, 26),
-        label: INITIALS[i % INITIALS.length],
-        accent: i % 5 === 0,
-        fill: PASTELS[i % PASTELS.length],
-        linked: new Set(),
-      }))
+      readAvoid()
+      nodes = Array.from({ length: count }, (_, i) => {
+        const r = compact ? rand(12, 18) : rand(15, 26)
+        // start somewhere clear of the logo and text
+        let x = rand(40, width - 40)
+        let y = rand(40, height - 40)
+        for (let tries = 0; tries < 40 && insideAvoid(x, y, r); tries++) {
+          x = rand(40, width - 40)
+          y = rand(40, height - 40)
+        }
+        return {
+          x,
+          y,
+          r,
+          vx: rand(-12, 12),
+          vy: rand(-12, 12),
+          label: INITIALS[i % INITIALS.length],
+          accent: i % 5 === 0,
+          fill: i % 6,
+          linked: new Set(),
+        }
+      })
+      nodes.forEach(pushOut)
       pulses = []
       rings = []
     }
@@ -61,6 +125,10 @@ export default function SocialBackdrop({ className = '' }) {
       canvas.height = Math.round(height * dpr)
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       if (nodes.length === 0 || grewALot) seed()
+      else {
+        readAvoid()
+        nodes.forEach(pushOut)
+      }
       if (still) draw(0)
     }
 
@@ -72,6 +140,7 @@ export default function SocialBackdrop({ className = '' }) {
         if (n.x > width - n.r) { n.x = width - n.r; n.vx = -Math.abs(n.vx) }
         if (n.y < n.r) { n.y = n.r; n.vy = Math.abs(n.vy) }
         if (n.y > height - n.r) { n.y = height - n.r; n.vy = -Math.abs(n.vy) }
+        pushOut(n)
       }
     }
 
@@ -94,9 +163,11 @@ export default function SocialBackdrop({ className = '' }) {
             ctx.lineTo(b.x, b.y)
             ctx.stroke()
             links.push([a, b])
-            if (!a.linked.has(b)) {
+            // only a clearly new connection gets a ripple (hysteresis + cap,
+            // so bubbles jostling at a keep-out edge don't flicker rings)
+            if (!a.linked.has(b) && d < LINK_DISTANCE * 0.8) {
               a.linked.add(b)
-              if (dt > 0) rings.push({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, t: 0 })
+              if (dt > 0 && rings.length < MAX_RINGS) rings.push({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, t: 0 })
             }
           } else {
             a.linked.delete(b)
@@ -140,14 +211,13 @@ export default function SocialBackdrop({ className = '' }) {
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       for (const n of nodes) {
-        ctx.fillStyle = n.accent ? primary : n.fill
+        // no outline: accent bubbles are white with green initials so they
+        // still stand out against the green background
+        ctx.fillStyle = n.accent ? primaryInk : fills[n.fill]
         ctx.beginPath()
         ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2)
         ctx.fill()
-        ctx.strokeStyle = ink
-        ctx.lineWidth = 3
-        ctx.stroke()
-        ctx.fillStyle = n.accent ? primaryInk : ink
+        ctx.fillStyle = n.accent ? primary : ink
         ctx.font = `700 ${Math.round(n.r * 0.62)}px ${font}`
         ctx.fillText(n.label, n.x, n.y + 0.5)
       }
@@ -156,6 +226,12 @@ export default function SocialBackdrop({ className = '' }) {
     function tick(now) {
       const dt = Math.min((now - last) / 1000, 0.05)
       last = now
+      // the text block moves while fonts load and its entrance animation runs
+      sinceAvoid += dt
+      if (sinceAvoid > 0.5) {
+        sinceAvoid = 0
+        readAvoid()
+      }
       move(dt)
       draw(dt)
       frame = requestAnimationFrame(tick)
@@ -163,6 +239,11 @@ export default function SocialBackdrop({ className = '' }) {
 
     const observer = new ResizeObserver(resize)
     observer.observe(canvas)
+    const themeWatch = new MutationObserver(() => {
+      readTokens()
+      if (still) draw(0)
+    })
+    themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
     resize()
     if (!still) {
       last = performance.now()
@@ -171,6 +252,7 @@ export default function SocialBackdrop({ className = '' }) {
     return () => {
       cancelAnimationFrame(frame)
       observer.disconnect()
+      themeWatch.disconnect()
     }
   }, [])
 

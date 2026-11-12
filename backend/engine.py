@@ -389,10 +389,18 @@ def build_edges_for_person(conn, pid: int, weight_factor: float = 1.0) -> int:
     """
     created = 0
     public = weight_factor < 1.0
-    note = " (public record)" if public else ""
+    externals = set(
+        conn.execute(text("SELECT id FROM people WHERE kind = 'external'")).scalars()
+    )
 
-    def scaled(w):
-        return max(0.03, round(w * weight_factor, 3))
+    # A link to (or from) someone found on the web rests on public data, so it
+    # starts weaker and says so, whichever side was added first
+    def scaled(w, other):
+        f = weight_factor if public else (PUBLIC_EDGE_FACTOR if other in externals else 1.0)
+        return max(0.03, round(w * f, 3))
+
+    def note(other):
+        return " (public record)" if public or other in externals else ""
 
     def insert(other, etype, weight, s, e, evidence):
         nonlocal created
@@ -421,7 +429,7 @@ def build_edges_for_person(conn, pid: int, weight_factor: float = 1.0) -> int:
     ):
         w, s, e = _overlap_weight(0.4, r.s1, r.e1, r.s2, r.e2)
         if w:
-            insert(r.other, "employer", scaled(w), s, e, f"overlapped at {r.org}{note}")
+            insert(r.other, "employer", scaled(w, r.other), s, e, f"overlapped at {r.org}{note(r.other)}")
 
     # project overlaps
     for r in conn.execute(
@@ -436,7 +444,7 @@ def build_edges_for_person(conn, pid: int, weight_factor: float = 1.0) -> int:
     ):
         w, s, e = _overlap_weight(0.65, r.s1, r.e1, r.s2, r.e2)
         if w:
-            insert(r.other, "project", scaled(w), s, e, f"both on project {r.project}{note}")
+            insert(r.other, "project", scaled(w, r.other), s, e, f"both on project {r.project}{note(r.other)}")
 
     if public:
         return created

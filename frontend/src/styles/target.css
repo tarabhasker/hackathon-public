@@ -25,7 +25,10 @@
 .ft-upgrade__icon { flex-shrink: 0; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: var(--primary); color: var(--primary-ink); }
 
 /* Search form */
-.ft-form { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end; padding: 18px; }
+.ft-form { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start; padding: 18px; }
+.ft-form .ui-btn { margin-top: 27px; } /* line up with the input, below its label */
+.ft-searching { display: flex; gap: 8px; align-items: center; margin: 0; color: var(--secondary-muted); }
+.ft-engine { margin: 0; font-size: 13px; }
 @media (max-width: 640px) { .ft-form { grid-template-columns: 1fr; } }
 
 .ft-section { display: flex; flex-direction: column; gap: 10px; }
@@ -80,9 +83,13 @@
 
 /* Past targets */
 .ft-history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.ft-history button { width: 100%; display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 10px 14px; border: 1px solid var(--ds-line); border-radius: var(--ds-radius-sm); background: var(--ds-surface); color: var(--secondary); font: inherit; text-align: left; cursor: pointer; }
-.ft-history button:hover { border-color: var(--secondary); }
+.ft-history li { display: flex; gap: 6px; align-items: center; }
+.ft-history .ft-history__open { flex: 1; min-width: 0; display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 10px 14px; border: 1px solid var(--ds-line); border-radius: var(--ds-radius-sm); background: var(--ds-surface); color: var(--secondary); font: inherit; text-align: left; cursor: pointer; }
+.ft-history .ft-history__open:hover { border-color: var(--secondary); }
+.ft-target__actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.ft-confirm { display: inline-flex; gap: 6px; align-items: center; font-size: 13.5px; white-space: nowrap; }
 
 /* Admin members table: plan pill */
 .admin-plan { display: inline-flex; gap: 8px; align-items: center; }
 .shell-nav__premium { color: var(--primary); font-size: 12px; }
+@media (max-width: 640px) { .ft-form .ui-btn { margin-top: 0; } }

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api'
-import ReachReport from '../components/target/ReachReport'
+import ReachReport, { DeleteTarget } from '../components/target/ReachReport'
 import { Badge, Button, Card, Eyebrow, Icon, Notice, Spinner, TextField } from '../components/ui'
 import { useAuth } from '../hooks/useAuth'
+import { splitTargetQuery } from '../lib/target'
 
 const RUNG_LABEL = { 1: 'Path found', 2: 'Into company', 3: 'Next to company', 4: 'Cold' }
 
@@ -78,8 +79,12 @@ export default function FindTarget() {
   const { user } = useAuth()
   const premium = user.plan === 'premium' || user.is_admin
   const [params] = useSearchParams()
-  const [company, setCompany] = useState(() => params.get('company') || '')
-  const [role, setRole] = useState(() => params.get('role') || '')
+  // One box: "VAT MY Managing Director" is split into role and company
+  const [text, setText] = useState(() =>
+    params.get('q') || [params.get('company'), params.get('role')].filter(Boolean).join(' '),
+  )
+  const { role, company } = splitTargetQuery(text)
+  const [searchedFor, setSearchedFor] = useState('')
   const [lookup, setLookup] = useState(null)
   const [report, setReport] = useState(null)
   const [busy, setBusy] = useState(null) // 'search' | candidate index | 'report'
@@ -93,8 +98,9 @@ export default function FindTarget() {
 
   useEffect(loadHistory, [loadHistory])
 
-  async function search(e, refresh = false, query = { company, role }) {
+  async function search(e, refresh = false, query = { company, role, query: text.trim() }) {
     e?.preventDefault()
+    setSearchedFor(query.query || `${query.company} ${query.role}`)
     setError(null)
     setReport(null)
     setLookup(null)
@@ -149,10 +155,27 @@ export default function FindTarget() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [premium, params])
 
+  // Removes the target (and, if nobody else looked them up, the person and the
+  // saved searches that found them, so the next search goes to the web again)
+  async function removeTarget(id) {
+    setError(null)
+    try {
+      await api(`/api/target/${id}`, { method: 'DELETE' })
+      setHistory((list) => list.filter((h) => h.id !== id))
+      if (report?.target.id === id) setReport(null)
+      setLookup(null)
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
   function refreshTarget() {
-    const query = { company: report.target.company, role: report.target.title }
-    setCompany(query.company)
-    setRole(query.role)
+    const query = {
+      company: report.target.company,
+      role: report.target.title,
+      query: `${report.target.company} ${report.target.title}`,
+    }
+    setText(query.query)
     search(null, true, query)
   }
 
@@ -176,24 +199,30 @@ export default function FindTarget() {
           <>
             <Card as="form" className="ft-form" onSubmit={search}>
               <TextField
-                label="Role"
-                placeholder="Managing Director"
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
+                label="Who are you trying to reach?"
+                placeholder="VAT MY Managing Director"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                hint={
+                  text.trim()
+                    ? role && company
+                      ? `Role: ${role} · Company: ${company}`
+                      : 'Add a role and a company, e.g. “Managing Director, Intel Malaysia”'
+                    : 'A role and a company, in any order'
+                }
                 required
               />
-              <TextField
-                label="Company"
-                placeholder="Intel Malaysia"
-                value={company}
-                onChange={(e) => setCompany(e.target.value)}
-                required
-              />
-              <Button type="submit" variant="primary" disabled={busy === 'search' || !company.trim() || !role.trim()}>
+              <Button type="submit" variant="primary" disabled={busy === 'search' || !company || !role}>
                 {busy === 'search' ? <Spinner size={14} /> : <Icon name="search" size={15} />}
-                {busy === 'search' ? 'Searching the web…' : 'Find'}
+                {busy === 'search' ? 'Searching…' : 'Search the web'}
               </Button>
             </Card>
+
+            {busy === 'search' && (
+              <p className="ft-searching" role="status">
+                <Spinner size={14} /> Searching Google for “{searchedFor}” and reading the results…
+              </p>
+            )}
 
             {error && <Notice>{error}</Notice>}
 
@@ -212,12 +241,18 @@ export default function FindTarget() {
                     role (for example “Country Manager”).
                   </p>
                 )}
+                <p className="ft-dim ft-engine">
+                  {lookup.cached
+                    ? `Saved search from ${new Date(lookup.created_at).toLocaleDateString()}`
+                    : `Searched ${lookup.engine || 'the web'}`}
+                  {' · '}
+                  {lookup.sources.length} result{lookup.sources.length === 1 ? '' : 's'} read
+                </p>
                 {lookup.candidates.map((c, i) => (
                   <CandidateCard key={`${c.name}-${i}`} candidate={c} busy={busy === i} onConfirm={() => confirm(i)} />
                 ))}
                 {lookup.cached && (
                   <p className="ft-dim">
-                    From a search on {new Date(lookup.created_at).toLocaleDateString()}.{' '}
                     <button type="button" className="ft-link" onClick={(e) => search(e, true)}>
                       Search the web again
                     </button>
@@ -229,7 +264,13 @@ export default function FindTarget() {
             {busy === 'report' && (
               <p className="ft-dim" role="status"><Spinner size={14} /> Working out your reach…</p>
             )}
-            {report && <ReachReport report={report} onRefresh={refreshTarget} />}
+            {report && (
+              <ReachReport
+                report={report}
+                onRefresh={refreshTarget}
+                onDelete={() => removeTarget(report.target.id)}
+              />
+            )}
 
             {history.length > 0 && (
               <section className="ft-section">
@@ -237,7 +278,7 @@ export default function FindTarget() {
                 <ul className="ft-history">
                   {history.map((h) => (
                     <li key={h.id}>
-                      <button type="button" onClick={() => openPast(h.id)}>
+                      <button type="button" className="ft-history__open" onClick={() => openPast(h.id)}>
                         <span>
                           <strong>{h.name}</strong> · {h.title}, {h.company}
                         </span>
@@ -245,6 +286,7 @@ export default function FindTarget() {
                           {RUNG_LABEL[h.best_rung] || '—'}
                         </Badge>
                       </button>
+                      <DeleteTarget name={h.name} compact onDelete={() => removeTarget(h.id)} />
                     </li>
                   ))}
                 </ul>

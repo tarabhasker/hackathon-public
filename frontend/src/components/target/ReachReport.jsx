@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { assetUrl } from '../../api'
 import { useCopied } from '../../hooks/useCopied'
@@ -109,7 +110,7 @@ function Rung({ rung, best, children }) {
   )
 }
 
-export default function ReachReport({ report, onRefresh }) {
+export default function ReachReport({ report, onRefresh, onDelete }) {
   const { target, rungs, best_rung: best } = report
   const [r1, r2, r3, r4] = rungs
   const firstHop = r1.path?.path[0]
@@ -133,11 +134,14 @@ export default function ReachReport({ report, onRefresh }) {
             </span>
           )}
         </div>
-        {target.stale && (
-          <Button variant="outline" size="sm" onClick={onRefresh}>
-            Re-check the web
-          </Button>
-        )}
+        <div className="ft-target__actions">
+          {target.stale && (
+            <Button variant="outline" size="sm" onClick={onRefresh}>
+              Re-check the web
+            </Button>
+          )}
+          {onDelete && <DeleteTarget name={target.name} onDelete={onDelete} />}
+        </div>
       </Card>
 
       <ol className="ft-ladder">
@@ -236,5 +240,50 @@ export default function ReachReport({ report, onRefresh }) {
         </span>
       </Card>
     </div>
+  )
+}
+
+// Two-step remove: the bin asks "Remove <name>?" before anything is deleted.
+export function DeleteTarget({ name, onDelete, compact = false }) {
+  const [asking, setAsking] = useState(false)
+  const [busy, setBusy] = useState(false)
+  if (!asking) {
+    return (
+      <Button
+        variant="ghost"
+        size="sm"
+        iconOnly={compact}
+        onClick={() => setAsking(true)}
+        aria-label={`Remove ${name}`}
+        title={`Remove ${name}`}
+      >
+        <Icon name="trash" size={15} />
+        {!compact && 'Remove'}
+      </Button>
+    )
+  }
+  return (
+    <span className="ft-confirm" role="group" aria-label={`Remove ${name}?`}>
+      <span>Remove {firstName(name)}?</span>
+      <Button
+        variant="primary"
+        size="sm"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true)
+          try {
+            await onDelete()
+          } finally {
+            setBusy(false)
+            setAsking(false)
+          }
+        }}
+      >
+        Remove
+      </Button>
+      <Button variant="ghost" size="sm" onClick={() => setAsking(false)}>
+        Cancel
+      </Button>
+    </span>
   )
 }

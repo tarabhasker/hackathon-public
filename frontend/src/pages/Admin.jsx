@@ -11,6 +11,8 @@ const EDGE_LABELS = {
   declared: 'Declared',
   school: 'Same school',
   semantic: 'Similar expertise',
+  group: 'Same company group (public)',
+  board: 'Board link (public)',
 }
 
 function Stat({ label, value, sub }) {

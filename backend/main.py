@@ -117,6 +117,7 @@ class SearchRequest(BaseModel):
 class TargetSearch(BaseModel):
     company: str
     role: str
+    query: str | None = None  # what the user typed, e.g. "VAT MY Managing Director"
     refresh: bool = False  # skip the 90-day cache and search the web again
 
 
@@ -900,15 +901,21 @@ def get_network(
 
 # --- Find the Target (premium) ------------------------------------------------------
 
-def _lookup_web(company: str, role: str) -> dict:
+def _lookup_web(company: str, role: str, query: str | None = None) -> dict:
     """llm.find_target with its failures turned into clear HTTP errors."""
     import llm
     from google.genai import errors
 
     try:
-        return llm.find_target(company, role)
+        return llm.find_target(company, role, query)
     except llm.LLMUnavailable as e:
         raise HTTPException(status_code=503, detail=str(e))
+    except llm.SearchQuotaExceeded as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{e}. Enable billing on the Gemini key's project, or set SERPER_API_KEY "
+            "in backend/.env to search Google through Serper.",
+        )
     except errors.APIError as e:
         if getattr(e, "code", None) == 429:
             raise HTTPException(
@@ -957,7 +964,7 @@ def target_search(req: TargetSearch, authorization: str | None = Header(default=
         if cached:
             return _lookup_payload(cached)
 
-    found = _lookup_web(company, role)
+    found = _lookup_web(company, role, (req.query or "").strip() or None)
     with engine.begin() as conn:
         row = conn.execute(
             text(
@@ -970,7 +977,7 @@ def target_search(req: TargetSearch, authorization: str | None = Header(default=
                 "cand": tgt._json(found["candidates"]), "src": tgt._json(found["sources"]),
             },
         ).first()
-    return {**_lookup_payload(row), "cached": False}
+    return {**_lookup_payload(row), "cached": False, "engine": found.get("engine")}
 
 
 @app.post("/api/target/confirm")
@@ -1021,6 +1028,53 @@ def target_reach(target_id: int, authorization: str | None = Header(default=None
     if report is None:
         raise HTTPException(status_code=404, detail="Target not found")
     return report
+
+
+@app.delete("/api/target/{target_id}")
+def delete_target(target_id: int, authorization: str | None = Header(default=None)):
+    """Remove a target from your list. If nobody else has looked them up, the
+    person goes entirely (career, public-record edges) along with the saved
+    web searches that found them, so searching again runs a fresh web search."""
+    user_id, _ = _require_premium(authorization)
+    with engine.begin() as conn:
+        person = conn.execute(
+            text("SELECT id FROM people WHERE id = :id AND kind = 'external'"), {"id": target_id}
+        ).first()
+        if person is None:
+            raise HTTPException(status_code=404, detail="Target not found")
+        others = conn.execute(
+            text(
+                "SELECT COUNT(*) FROM target_lookups "
+                "WHERE chosen_person_id = :id AND user_id IS DISTINCT FROM :u"
+            ),
+            {"id": target_id, "u": user_id},
+        ).scalar_one()
+        if others:
+            conn.execute(
+                text("DELETE FROM target_lookups WHERE chosen_person_id = :id AND user_id = :u"),
+                {"id": target_id, "u": user_id},
+            )
+            return {"id": target_id, "deleted": "from_your_list"}
+        # the searches that found them, including the cached candidate lists
+        conn.execute(
+            text(
+                "DELETE FROM target_lookups WHERE chosen_person_id = :id OR query_key IN "
+                "(SELECT query_key FROM target_lookups WHERE chosen_person_id = :id)"
+            ),
+            {"id": target_id},
+        )
+        org_id = conn.execute(
+            text("DELETE FROM people WHERE id = :id RETURNING org_id"), {"id": target_id}
+        ).scalar()
+        if org_id:
+            conn.execute(
+                text(
+                    "DELETE FROM organisations o WHERE id = :o "
+                    "AND NOT EXISTS (SELECT 1 FROM people WHERE org_id = o.id)"
+                ),
+                {"o": org_id},
+            )
+    return {"id": target_id, "deleted": "everywhere"}
 
 
 @app.get("/api/targets")
@@ -1421,6 +1475,9 @@ def intake_confirm(profile: ConfirmProfile, authorization: str | None = Header(d
                 )
 
         edges_created = matching.build_edges_for_person(conn, pid)
+        import target as tgt
+
+        edges_created += tgt.build_group_edges(conn, pid)
 
         if user_id is not None:
             conn.execute(

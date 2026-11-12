@@ -26,6 +26,7 @@ from engine import (
     TARGET_MAX_HOPS,
     THIS_YEAR,
     _edge_info,
+    _overlap_weight,
     avatar_url,
     build_edges_for_person,
     load_graph,
@@ -52,10 +53,21 @@ def org_key(name: str | None) -> str:
     return " ".join(s.split())
 
 
+# First words too generic to mean "same group" ("Malaysia Airlines" and
+# "Malaysia Steel" are not related)
+_GROUP_STOPWORDS = {
+    "the", "pt", "bank", "malaysia", "malaysian", "national", "global", "international",
+    "first", "united", "general", "asia", "asian", "group", "new", "american", "china", "singapore",
+}
+
+
 def group_key(name: str | None) -> str:
-    """First word of the company name, a loose 'same group' match (intel)."""
+    """First word of the company name, a loose 'same group' match, so
+    'VAT Malaysia' meets 'VAT Manufacturing Malaysia Sdn. Bhd.' ("vat").
+    Empty when that word is too generic to trust."""
     key = org_key(name)
-    return key.split(" ", 1)[0] if key else ""
+    first = key.split(" ", 1)[0] if key else ""
+    return "" if len(first) < 3 or first in _GROUP_STOPWORDS else first
 
 
 def strength_label(strength: float) -> str:
@@ -158,8 +170,79 @@ def save_external(conn, candidate: dict, role_query: str) -> int:
         },
     )
 
-    build_edges_for_person(conn, pid, weight_factor=PUBLIC_EDGE_FACTOR)
+    build_target_edges(conn, pid)
     return pid
+
+
+GROUP_BASE = 0.3        # same group, different entity name: weaker than same employer (0.4)
+UNKNOWN_TENURE = 3      # a current role with no start year: assume it began ~3 years ago
+
+
+def _assumed_years(s, e):
+    """A public profile often gives a role but not its years: assume a
+    current role started UNKNOWN_TENURE years ago rather than forever."""
+    if s is None and e is None:
+        return THIS_YEAR - UNKNOWN_TENURE, None
+    if s is None:
+        return e - UNKNOWN_TENURE, e
+    return s, e
+
+
+def build_group_edges(conn, pid: int) -> int:
+    """Edges between people at the same company group under different names
+    ("VAT Malaysia" / "VAT Manufacturing Malaysia Sdn. Bhd."), only between a
+    staff member and an external target (public record, half weight). Works
+    from either side, so a new CV upload also links to existing targets."""
+    kind = conn.execute(text("SELECT kind FROM people WHERE id = :id"), {"id": pid}).scalar()
+    other_kind = "staff" if kind == "external" else "external"
+    mine = conn.execute(
+        text("SELECT org, started_year s, ended_year e FROM positions WHERE person_id = :id"),
+        {"id": pid},
+    ).all()
+    theirs = conn.execute(
+        text(
+            "SELECT pos.person_id AS other, pos.org, pos.started_year s, pos.ended_year e "
+            "FROM positions pos JOIN people p ON p.id = pos.person_id WHERE p.kind = :k"
+        ),
+        {"k": other_kind},
+    ).all()
+    best: dict[int, tuple] = {}
+    for m in mine:
+        g = group_key(m.org)
+        if not g:
+            continue
+        for t in theirs:
+            if group_key(t.org) != g or org_key(t.org) == org_key(m.org):
+                continue  # different group, or an exact match the edge builder already made
+            ext, stf = (m, t) if kind == "external" else (t, m)
+            es, ee = _assumed_years(ext.s, ext.e)
+            w, s, e = _overlap_weight(GROUP_BASE, es, ee, stf.s, stf.e)
+            if not w:
+                continue
+            w = max(0.03, round(w * PUBLIC_EDGE_FACTOR, 3))
+            if w > best.get(t.other, (0,))[0]:
+                best[t.other] = (w, s, e, f"overlapped at {stf.org} / {ext.org} (public record)")
+    created = 0
+    for other, (w, s, e, evidence) in best.items():
+        created += conn.execute(
+            text(
+                "INSERT INTO edges (src, dst, type, weight, started_at, ended_at, evidence) "
+                "VALUES (:a, :b, 'group', :w, make_date(:s,1,1), make_date(:e,1,1), :ev) "
+                "ON CONFLICT (src, dst, type) DO UPDATE SET weight = EXCLUDED.weight, "
+                "evidence = EXCLUDED.evidence"
+            ),
+            {"a": min(pid, other), "b": max(pid, other), "w": w,
+             "s": s or THIS_YEAR, "e": e or THIS_YEAR, "ev": evidence},
+        ).rowcount
+    return created
+
+
+def build_target_edges(conn, pid: int) -> int:
+    """All public-record edges for an external target: exact employer and
+    project overlaps, then same-group overlaps."""
+    return build_edges_for_person(conn, pid, weight_factor=PUBLIC_EDGE_FACTOR) + build_group_edges(
+        conn, pid
+    )
 
 
 def _json(value) -> str:
@@ -494,9 +577,12 @@ def match_targets(conn, query: str, limit: int = 3) -> list[dict]:
             "WHERE p.kind = 'external'"
         )
     ):
-        words = set(re.findall(r"[a-z0-9]+", f"{r.name} {r.title or ''} {r.company or ''}".lower()))
+        who = set(re.findall(r"[a-z0-9]+", f"{r.name} {r.company or ''}".lower()))
+        words = who | set(re.findall(r"[a-z0-9]+", (r.title or "").lower()))
         score = len(q & words) / len(q)
-        if score >= 0.6:
+        # the company or the name must match too: "Managing Director" alone
+        # would surface every MD we've ever looked up
+        if score >= 0.6 and q & who:
             hits.append((score, r))
     hits.sort(key=lambda h: -h[0])
     return [

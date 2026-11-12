@@ -409,13 +409,13 @@ def main():
             print(f"Linked {len(real_ids)} real user(s) to synthetic people")
 
         # Re-attach external targets to the new synthetic staff
-        from engine import PUBLIC_EDGE_FACTOR, build_edges_for_person
+        from target import build_target_edges
 
         external_ids = conn.execute(
             text("SELECT id FROM people WHERE kind = 'external' ORDER BY id")
         ).scalars().all()
         for xid in external_ids:
-            build_edges_for_person(conn, xid, weight_factor=PUBLIC_EDGE_FACTOR)
+            build_target_edges(conn, xid)
         conn.commit()
         if external_ids:
             print(f"Rebuilt edges for {len(external_ids)} external target(s)")

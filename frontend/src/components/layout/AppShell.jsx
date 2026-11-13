@@ -8,6 +8,7 @@ import { Avatar, Icon, Logo } from '../ui'
 // Admins see only their hosting tools; members see the network app.
 const MEMBER_NAV = [
   { to: '/', label: 'Network', mobileLabel: 'Find', icon: 'network', mobileIcon: 'search', end: true },
+  { to: '/target', label: 'Find the Target', mobileLabel: 'Target', icon: 'target', premium: true },
   { to: '/calendar', label: 'Calendar', icon: 'calendar' },
   { to: '/profile', label: 'Profile', icon: 'user' },
 ]
@@ -86,7 +87,10 @@ function Sidebar({ collapsed, onToggle }) {
       {nav.map((item) => (
         <NavLink key={item.to} to={item.to} end={item.end} className="shell-nav__link" {...tip(item.label)}>
           <Icon name={item.icon} />
-          <span className="shell-nav__label">{item.label}</span>
+          <span className="shell-nav__label">
+            {item.label}
+            {item.premium && <span className="shell-nav__premium" aria-label="Premium"> ★</span>}
+          </span>
         </NavLink>
       ))}
       <div className="shell-nav__spacer" />

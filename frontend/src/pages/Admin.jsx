@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api'
 import { ConnectionsSplit, JoinsArea, TeamBars } from '../components/admin/Charts'
-import { Button, Card, Eyebrow, Icon, Spinner, useToast } from '../components/ui'
+import { Badge, Button, Card, Eyebrow, Icon, Spinner, useToast } from '../components/ui'
 import { useAuth } from '../hooks/useAuth'
 import { useCountUp } from '../hooks/useCountUp'
 
@@ -11,6 +11,8 @@ const EDGE_LABELS = {
   declared: 'Declared',
   school: 'Same school',
   semantic: 'Similar expertise',
+  group: 'Same company group (public)',
+  board: 'Board link (public)',
 }
 
 function Stat({ label, value, sub }) {
@@ -29,12 +31,18 @@ export default function Admin() {
   const toast = useToast()
   const [overview, setOverview] = useState(null)
   const [events, setEvents] = useState(null)
+  const [members, setMembers] = useState([])
 
   const load = useCallback(async () => {
     try {
-      const [ov, ev] = await Promise.all([api('/api/admin/overview'), api('/api/admin/events')])
+      const [ov, ev, us] = await Promise.all([
+        api('/api/admin/overview'),
+        api('/api/admin/events'),
+        api('/api/admin/users'),
+      ])
       setOverview(ov)
       setEvents(ev)
+      setMembers(us)
     } catch (err) {
       toast.error(err.message)
     }
@@ -43,6 +51,16 @@ export default function Admin() {
   useEffect(() => {
     load()
   }, [load])
+
+  async function togglePremium(member) {
+    try {
+      const res = await api(`/api/admin/users/${member.id}/toggle-premium`, { method: 'POST' })
+      setMembers((list) => list.map((m) => (m.id === member.id ? { ...m, plan: res.plan } : m)))
+      toast.success(`${member.email} is now ${res.plan === 'premium' ? 'Premium' : 'on the free plan'}`)
+    } catch (err) {
+      toast.error(err.message)
+    }
+  }
 
   if (!overview || !events) {
     return (
@@ -88,6 +106,50 @@ export default function Admin() {
             <ConnectionsSplit data={overview.edges_by_type} labels={EDGE_LABELS} />
           </Card>
         </div>
+      </section>
+
+      <section className="admin-section" style={{ '--d': '120ms' }}>
+        <Eyebrow>Find the Target (Premium)</Eyebrow>
+        <div className="admin-stats">
+          <Stat label="Premium members" value={Number(overview.premium_users)} />
+          <Stat label="Target lookups" value={Number(overview.target_lookups)} />
+          <Stat label="Coverage gaps" value={Number(overview.coverage_gaps)} sub="targets with no warm path" />
+        </div>
+        <Card className="admin-tablewrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Member</th>
+                <th>Plan</th>
+                <th aria-label="Actions" />
+              </tr>
+            </thead>
+            <tbody>
+              {members
+                .filter((m) => !m.is_admin)
+                .map((m) => (
+                  <tr key={m.id}>
+                    <td>
+                      {m.person_name || <span className="admin-dim">No profile yet</span>}
+                      <div className="admin-dim">{m.email}</div>
+                    </td>
+                    <td>
+                      <Badge tone={m.plan === 'premium' ? 'primary' : 'neutral'}>
+                        {m.plan === 'premium' ? '★ Premium' : 'Free'}
+                      </Badge>
+                    </td>
+                    <td>
+                      <div className="admin-actions">
+                        <Button variant="outline" size="sm" onClick={() => togglePremium(m)}>
+                          {m.plan === 'premium' ? 'Remove Premium' : 'Make Premium'}
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </Card>
       </section>
     </div>
   )

@@ -46,19 +46,25 @@ function project(p, sinY, cosY, sinP, cosP) {
   return { x: CX + x * scale * VIEW_SCALE, y: CY + y * scale * VIEW_SCALE, z, scale }
 }
 
+const REVEAL_DELAY = 450 // ms before the route starts lighting up, so the graph settles first
+
 // Sun, planets, moons, and moons of moons — one size per degree of connection
 const BODY_SIZES = [84, 56, 40, 32, 28, 25, 23]
 const bodySize = (depth) => BODY_SIZES[Math.min(depth, BODY_SIZES.length - 1)]
+// A Find the Target person is the destination of the story, so they're drawn
+// as large as a direct connection however many hops away they are
+const TARGET_SIZE = 56
+const sizeOf = (node) => (node.external ? Math.max(TARGET_SIZE, bodySize(node.depth)) : bodySize(node.depth))
 
 function Body({ node, index, role, tie, register, onSelect, onHover }) {
   // role: 'you' | 'target' | 'path' | 'other'
-  const size = bodySize(node.depth)
+  const size = sizeOf(node)
   const label = role === 'you' ? 'YOU' : initials(node.name)
   return (
     <button
       type="button"
       ref={(el) => register(node.id, el)}
-      className={`nw-node nw-node--${role} ${node.depth >= 2 ? 'nw-node--moon' : ''}`}
+      className={`nw-node nw-node--${role} ${node.depth >= 2 ? 'nw-node--moon' : ''} ${node.external ? 'nw-node--external' : ''}`}
       onClick={() => role !== 'you' && onSelect(node)}
       onPointerEnter={() => onHover(true)}
       onPointerLeave={() => onHover(false)}
@@ -144,11 +150,13 @@ function useFitScale() {
 // whole sphere turns as one, so people never run into each other. Drag to turn
 // it; it pauses while you hover or focus someone so they are easy to click.
 // `path` is the list of ids from you to the selected person; those bodies and
-// the links between them are highlighted.
+// the links between them are highlighted. With `revealMs` the route lights up
+// one link at a time (that many ms per hop) each time it changes, so a long
+// path to a target reads as a journey; 0 shows it at once.
 //
 // People stay real DOM buttons (photos, tooltips, keyboard focus); each frame
 // we only move/scale them and repaint rings and links on a canvas behind.
-export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, mode = '3d' }) {
+export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, mode = '3d', revealMs = 0 }) {
   const points = useMemo(() => sphereLayout(nodes), [nodes])
   // the flat radial layout, centred on the origin like the sphere
   const flat = useMemo(() => {
@@ -164,6 +172,7 @@ export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, m
   const [fitRef, fit] = useFitScale()
 
   const canvasRef = useRef(null)
+  const labelsRef = useRef(null) // strength labels, on a layer above the people
   const stageRef = useRef(null)
   const elements = useRef({})
   const view = useRef({ morph: mode === '3d' ? 1 : 0, yaw: START_YAW, pitch: START_PITCH, hovering: false, hotId: null, dragging: false, moved: false })
@@ -185,11 +194,13 @@ export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, m
   // Latest data for the animation loop, without restarting it on every change
   const scene = useRef({})
   useEffect(() => {
-    scene.current = { nodes, edges, path, points, flat, mode, adjacency, resolution: Math.min(fit * zoom, 2) }
-  }, [nodes, edges, path, points, flat, mode, adjacency, fit, zoom])
+    scene.current = { nodes, edges, path, points, flat, mode, adjacency, revealMs, resolution: Math.min(fit * zoom, 2) }
+  }, [nodes, edges, path, points, flat, mode, adjacency, revealMs, fit, zoom])
 
   useEffect(() => {
     const canvas = canvasRef.current
+    const labelCanvas = labelsRef.current
+    const labelCtx = labelCanvas.getContext('2d')
     const ctx = canvas.getContext('2d')
     const tokens = getComputedStyle(document.documentElement)
     const primary = tokens.getPropertyValue('--primary').trim() || '#367B70'
@@ -207,7 +218,30 @@ export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, m
       const dt = Math.min((now - last) / 1000, 0.05)
       last = now
       const v = view.current
-      const { nodes: people = [], edges: links = [], path: route = [], points: at = {}, flat: flatAt = {}, mode: shape = '3d', adjacency: adj = {}, resolution = 1 } = scene.current
+      const { nodes: people = [], edges: links = [], path: route = [], points: at = {}, flat: flatAt = {}, mode: shape = '3d', adjacency: adj = {}, revealMs: hopMs = 0, resolution = 1 } = scene.current
+      // How far along the route the light has travelled, in hops. A new route
+      // restarts it; the same route (e.g. a background refresh) does not.
+      const routeKey = route.join('-')
+      if (v.routeKey !== routeKey) {
+        v.routeKey = routeKey
+        v.routeStart = now
+        // In 3D, turn the sphere until the destination sits side-on to the
+        // camera, so the route runs across the screen instead of toward you
+        const end = route.length > 1 && hopMs > 0 ? at[route[route.length - 1]] : null
+        v.turnTo = end ? Math.atan2(end.z * STRETCH.z, end.x * STRETCH.x) : null
+      }
+      if (v.turnTo != null && !v.dragging) {
+        const diff = Math.atan2(Math.sin(v.turnTo - v.yaw), Math.cos(v.turnTo - v.yaw))
+        if (Math.abs(diff) < 0.002 || still) {
+          v.yaw = still ? v.turnTo : v.yaw + diff
+          v.turnTo = null
+        } else {
+          v.yaw += diff * Math.min(1, dt * 2.5)
+        }
+      } else if (v.dragging) {
+        v.turnTo = null // the user took the wheel
+      }
+      const lit = hopMs > 0 && !still ? Math.max(0, (now - v.routeStart - REVEAL_DELAY) / hopMs) : Infinity
       // the sphere stops turning while you hover or drag, so nobody slips away
       // ease between the flat map (0) and the sphere (1)
       const goal = shape === '3d' ? 1 : 0
@@ -220,6 +254,8 @@ export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, m
         pixels = wanted
         canvas.width = Math.round(GRAPH_W * pixels)
         canvas.height = Math.round(GRAPH_H * pixels)
+        labelCanvas.width = canvas.width
+        labelCanvas.height = canvas.height
       }
       ctx.setTransform(pixels, 0, 0, pixels, 0, 0)
       ctx.clearRect(0, 0, GRAPH_W, GRAPH_H)
@@ -246,7 +282,7 @@ export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, m
           z: sphere.z * depthMix,
           scale: 1 + (sphere.scale - 1) * depthMix,
         }
-        p.r = (bodySize(person.depth) / 2) * p.scale
+        p.r = (sizeOf(person) / 2) * p.scale
         p.fixed = person.depth === 0
         screen[person.id] = p
         bodies.push(p)
@@ -367,7 +403,7 @@ export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, m
         const ia = route.indexOf(link.a)
         const ib = route.indexOf(link.b)
         if (ia > -1 && ib > -1 && Math.abs(ia - ib) === 1) {
-          onRoute.push(ia < ib ? [a, b] : [b, a])
+          onRoute.push(ia < ib ? [a, b, ia] : [b, a, ib])
           continue
         }
         const onTree = parentOf[link.a] === link.b || parentOf[link.b] === link.a
@@ -396,42 +432,120 @@ export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, m
         ctx.lineTo(b.x, b.y)
         ctx.stroke()
         if (touchesHot && link.weight != null) {
-          hotLabels.push({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, weight: link.weight })
+          hotLabels.push({ a, b, weight: link.weight })
         }
       }
       ctx.globalAlpha = 1
-      for (const [from, to] of onRoute) {
+      for (const [from, to, hop] of onRoute) {
+        const t = Math.max(0, Math.min(1, lit - hop)) // how much of this link is lit
+        if (t <= 0) continue
+        const end = { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t }
+        if (lit !== Infinity) {
+          // a soft glow under the link while the route is being revealed
+          ctx.setLineDash([])
+          ctx.strokeStyle = withAlpha(primary, 0.22)
+          ctx.lineWidth = 9
+          ctx.beginPath()
+          ctx.moveTo(from.x, from.y)
+          ctx.lineTo(end.x, end.y)
+          ctx.stroke()
+        }
         ctx.strokeStyle = primary
         ctx.lineWidth = 3
         ctx.setLineDash([8, 6])
         ctx.beginPath()
         ctx.moveTo(from.x, from.y)
-        ctx.lineTo(to.x, to.y)
+        ctx.lineTo(end.x, end.y)
         ctx.stroke()
+        if (t < 1) {
+          // the travelling spark at the head of the light
+          ctx.setLineDash([])
+          ctx.fillStyle = primary
+          ctx.beginPath()
+          ctx.arc(end.x, end.y, 5, 0, Math.PI * 2)
+          ctx.fill()
+        }
       }
       ctx.setLineDash([])
       ctx.lineDashOffset = 0
 
-      // Strength labels on the hovered person's ties
+      // Strength labels on the hovered person's ties. They are painted on
+      // their own layer above the people, and each one slides along its line
+      // to a spot that no bubble, name tag, hover card or other label covers.
+      labelCtx.setTransform(pixels, 0, 0, pixels, 0, 0)
+      labelCtx.clearRect(0, 0, GRAPH_W, GRAPH_H)
       if (hotLabels.length > 0) {
-        ctx.font = '600 11px "Inter", system-ui, sans-serif'
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'middle'
+        labelCtx.font = '600 11px "Inter", system-ui, sans-serif'
+        labelCtx.textAlign = 'center'
+        labelCtx.textBaseline = 'middle'
+        const hotAt = screen[hot]
+        // the hovered person's info card sits above them (below, near the top edge)
+        const card = hotAt && {
+          l: hotAt.x - 180 * hotAt.scale,
+          r: hotAt.x + 180 * hotAt.scale,
+          t: hotAt.y < GRAPH_H * 0.3 ? hotAt.y : hotAt.y - hotAt.r - 190 * hotAt.scale,
+          b: hotAt.y < GRAPH_H * 0.3 ? hotAt.y + hotAt.r + 190 * hotAt.scale : hotAt.y,
+        }
+        const placed = []
+        // how much clear space a label centred at (x, y) has; negative = covered
+        const clearance = (x, y, half) => {
+          let room = Infinity
+          for (const body of bodies) {
+            // a bubble (the hovered one swells, so give it extra), plus the
+            // name tag hanging under it
+            const radius = body === hotAt ? body.r * 1.3 : body.r
+            room = Math.min(room, Math.hypot(body.x - x, body.y - y) - radius - half)
+            room = Math.min(room, Math.max(Math.abs(body.x - x) - 44 * body.scale - half, Math.abs(body.y + body.r + 16 * body.scale - y) - 20))
+          }
+          for (const other of placed) room = Math.min(room, Math.max(Math.abs(other.x - x) - other.half - half, Math.abs(other.y - y) - 20))
+          if (card && x > card.l - half && x < card.r + half && y > card.t - 10 && y < card.b + 10) room = Math.min(room, -50)
+          return room
+        }
         for (const tag of hotLabels) {
           const text = `${Math.round(tag.weight * 100)}%`
-          const w = ctx.measureText(text).width + 12
-          ctx.globalAlpha = 0.96
-          ctx.fillStyle = surface
-          ctx.strokeStyle = primary
-          ctx.lineWidth = 1
-          ctx.beginPath()
-          ctx.roundRect(tag.x - w / 2, tag.y - 9, w, 18, 9)
-          ctx.fill()
-          ctx.stroke()
-          ctx.fillStyle = ink
-          ctx.fillText(text, tag.x, tag.y + 0.5)
+          const half = labelCtx.measureText(text).width / 2 + 6
+          // Candidate spots, best first: along the line near its middle; then
+          // just to either side of the line; then, for short lines with no
+          // room, just past the far person.
+          const dx = tag.b.x - tag.a.x
+          const dy = tag.b.y - tag.a.y
+          const len = Math.hypot(dx, dy) || 1
+          const nx = -dy / len
+          const ny = dx / len
+          const spots = []
+          for (const side of [0, 20, -20]) {
+            for (const t of [0.5, 0.42, 0.58, 0.34, 0.66, 0.26, 0.74, 0.18, 0.82]) {
+              spots.push({ x: tag.a.x + dx * t + nx * side, y: tag.a.y + dy * t + ny * side })
+            }
+          }
+          const far = hotAt && Math.hypot(tag.a.x - hotAt.x, tag.a.y - hotAt.y) > Math.hypot(tag.b.x - hotAt.x, tag.b.y - hotAt.y) ? tag.a : tag.b
+          const dir = far === tag.b ? 1 : -1
+          for (const gap of [10, 24]) {
+            const reach = far.r + half + gap
+            spots.push({ x: far.x + (dx / len) * dir * reach, y: far.y + (dy / len) * dir * reach })
+            spots.push({ x: far.x + nx * reach, y: far.y + ny * reach })
+            spots.push({ x: far.x - nx * reach, y: far.y - ny * reach })
+          }
+          let best = null
+          for (const spot of spots) {
+            if (spot.x < half || spot.x > GRAPH_W - half || spot.y < 10 || spot.y > GRAPH_H - 10) continue
+            const room = clearance(spot.x, spot.y, half)
+            if (!best || room > best.room) best = { ...spot, room }
+            if (room >= 4) break // first clear spot wins
+          }
+          if (!best) best = { ...spots[0], room: 0 }
+          placed.push({ x: best.x, y: best.y, half })
+          labelCtx.globalAlpha = 1
+          labelCtx.fillStyle = surface
+          labelCtx.strokeStyle = primary
+          labelCtx.lineWidth = 1
+          labelCtx.beginPath()
+          labelCtx.roundRect(best.x - half, best.y - 9, half * 2, 18, 9)
+          labelCtx.fill()
+          labelCtx.stroke()
+          labelCtx.fillStyle = ink
+          labelCtx.fillText(text, best.x, best.y + 0.5)
         }
-        ctx.globalAlpha = 1
       }
 
       // Bodies: move, scale and fade with depth; nearer ones stack on top;
@@ -442,11 +556,22 @@ export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, m
         const el = elements.current[person.id]
         const p = screen[person.id]
         if (!el || !p) continue
-        const highlighted = person.depth === 0 || route.includes(person.id)
+        const stop = route.indexOf(person.id)
+        const reached = stop > -1 && lit >= stop
+        const highlighted = person.depth === 0 || reached
+        // route people the light hasn't reached yet look like everyone else
+        el.classList.toggle('nw-node--pending', stop > 0 && !reached)
+        // the moment the light arrives, the person flashes
+        if (reached && lit !== Infinity && el.dataset.arrived !== routeKey) {
+          el.dataset.arrived = routeKey
+          el.classList.remove('nw-node--arrive')
+          void el.offsetWidth // restart the CSS animation
+          el.classList.add('nw-node--arrive')
+        }
         let fade = Math.max(0.35, Math.min(1, 0.8 + (p.scale - 1) * 1.6))
         // hovering someone dims everyone not tied to them
         if (hot != null && person.id !== hot && !adj[hot]?.has(person.id)) fade *= 0.35
-        el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -${bodySize(person.depth) / 2}px) scale(${p.scale})`
+        el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -${sizeOf(person) / 2}px) scale(${p.scale})`
         el.style.opacity = highlighted && hot == null ? 1 : hot === person.id ? 1 : fade
         el.style.zIndex = Math.round(1000 - p.z) + (highlighted ? 400 : 0)
         if (sunAt && person.depth > 0) {
@@ -524,6 +649,7 @@ export default function NetworkGraph({ nodes, edges, path, onSelect, zoom = 1, m
         style={{ width: GRAPH_W, height: GRAPH_H, transform: `translate(-50%, -50%) scale(${fit * zoom})` }}
       >
         <canvas ref={canvasRef} className="nw-graph__links" aria-hidden="true" />
+        <canvas ref={labelsRef} className="nw-graph__links nw-graph__labels" aria-hidden="true" />
         {nodes.map((node, index) => {
           if (!points[node.id]) return null
           const role =

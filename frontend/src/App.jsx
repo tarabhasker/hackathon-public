@@ -5,6 +5,7 @@ import PendingEventJoiner from './components/events/PendingEventJoiner'
 import { ToastProvider } from './components/ui'
 import { AuthProvider } from './hooks/useAuth'
 import Admin from './pages/Admin'
+import FindTarget from './pages/FindTarget'
 import AdminEvent from './pages/AdminEvent'
 import { Register, SignIn } from './pages/AuthForm'
 import Calendar from './pages/Calendar'
@@ -42,6 +43,7 @@ export default function App() {
             <Route element={<RequireProfile />}>
               <Route element={<AppShell />}>
                 <Route index element={<Network />} />
+                <Route path="/target" element={<FindTarget />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/people/:id" element={<Profile />} />
                 <Route path="/events/:id" element={<MyEvent />} />

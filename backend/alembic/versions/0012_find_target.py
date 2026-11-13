@@ -3,6 +3,9 @@
 Revision ID: 0012
 Revises: 0011
 Create Date: 2026-11-13
+
+Idempotent on purpose: some databases applied this schema when the
+revision was numbered 0011, before coffee chats took that slot.
 """
 from alembic import op
 
@@ -14,13 +17,13 @@ depends_on = None
 
 def upgrade() -> None:
     op.execute(
-        "ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT 'free' "
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free' "
         "CHECK (plan IN ('free', 'premium'))"
     )
 
     op.execute(
         """
-        CREATE TABLE organisations (
+        CREATE TABLE IF NOT EXISTS organisations (
             id          SERIAL PRIMARY KEY,
             name        TEXT NOT NULL,
             name_key    TEXT NOT NULL UNIQUE,   -- lower(trim(name)), for matching
@@ -32,17 +35,17 @@ def upgrade() -> None:
     # staff = our own people (synthetic or CV-uploaded); external = someone
     # found on the web by Find the Target, never shown in normal search
     op.execute(
-        "ALTER TABLE people ADD COLUMN kind TEXT NOT NULL DEFAULT 'staff' "
+        "ALTER TABLE people ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'staff' "
         "CHECK (kind IN ('staff', 'external'))"
     )
     op.execute(
-        "ALTER TABLE people ADD COLUMN org_id INT REFERENCES organisations(id) ON DELETE SET NULL"
+        "ALTER TABLE people ADD COLUMN IF NOT EXISTS org_id INT REFERENCES organisations(id) ON DELETE SET NULL"
     )
-    op.execute("CREATE INDEX people_kind_idx ON people (kind)")
+    op.execute("CREATE INDEX IF NOT EXISTS people_kind_idx ON people (kind)")
 
     op.execute(
         """
-        CREATE TABLE external_profiles (
+        CREATE TABLE IF NOT EXISTS external_profiles (
             person_id     INT PRIMARY KEY REFERENCES people(id) ON DELETE CASCADE,
             role_query    TEXT,
             schools       JSONB NOT NULL DEFAULT '[]',
@@ -57,7 +60,7 @@ def upgrade() -> None:
     # Every web lookup: the cache, the audit log and the coverage-gap record
     op.execute(
         """
-        CREATE TABLE target_lookups (
+        CREATE TABLE IF NOT EXISTS target_lookups (
             id                SERIAL PRIMARY KEY,
             user_id           INT REFERENCES users(id) ON DELETE SET NULL,
             company           TEXT NOT NULL,
@@ -72,8 +75,8 @@ def upgrade() -> None:
         )
         """
     )
-    op.execute("CREATE INDEX target_lookups_query_idx ON target_lookups (query_key, created_at DESC)")
-    op.execute("CREATE INDEX target_lookups_user_idx ON target_lookups (user_id, created_at DESC)")
+    op.execute("CREATE INDEX IF NOT EXISTS target_lookups_query_idx ON target_lookups (query_key, created_at DESC)")
+    op.execute("CREATE INDEX IF NOT EXISTS target_lookups_user_idx ON target_lookups (user_id, created_at DESC)")
 
 
 def downgrade() -> None:

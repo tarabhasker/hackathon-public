@@ -10,12 +10,15 @@ import os
 EMBED_MODEL = os.environ.get("GEMINI_EMBED_MODEL", "gemini-embedding-001")
 EMBED_DIM = 768  # must match vector(768) in the facets schema
 GEN_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
-# Tried in order when the preferred model is overloaded (503) or retired (404)
+# Tried in order when the preferred model is overloaded (503/504) or retired
+# (404). A lite model sits second on purpose: when the flagship is congested
+# (common at peak), the chain reaches a healthy model after one failover
+# instead of three.
 GEN_FALLBACKS = [
     GEN_MODEL,
+    "gemini-3.5-flash-lite",
     "gemini-3.6-flash",
     "gemini-3.5-flash",
-    "gemini-3.5-flash-lite",
     "gemini-3.1-flash-lite",
 ]
 
@@ -29,20 +32,30 @@ def _client():
     if not api_key:
         return None
     from google import genai
-    # per-request cap so an overloaded model fails over instead of hanging
-    return genai.Client(api_key=api_key, http_options={"timeout": 25_000})
+    # per-request cap so an overloaded model fails over instead of hanging;
+    # kept short because hosted platforms cut the whole request at ~30s
+    return genai.Client(api_key=api_key, http_options={"timeout": 12_000})
+
+
+# Index of the model that answered most recently: later calls start there, so
+# only the first request after a restart pays for discovering an outage.
+_preferred = 0
 
 
 def _generate(client, contents, config=None):
     """generate_content with model fallbacks for overload/retirement errors."""
+    global _preferred
     from google.genai import errors
 
+    order = GEN_FALLBACKS[_preferred:] + GEN_FALLBACKS[:_preferred]
     last = None
-    for model in GEN_FALLBACKS:
+    for model in order:
         try:
-            return client.models.generate_content(
+            response = client.models.generate_content(
                 model=model, contents=contents, config=config
             )
+            _preferred = GEN_FALLBACKS.index(model)
+            return response
         except errors.APIError as e:
             last = e
             if getattr(e, "code", None) in (404, 429, 503, 504):
